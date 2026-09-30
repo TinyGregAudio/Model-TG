@@ -33,8 +33,11 @@ These were each verified on hardware; they save a lot of rediscovery.
   (text: `55 - y`).
 - **Keys:** the key-code accessor `0x4007240c` is what every consumer calls, so
   `key_hook` wraps it to see chords. Codes: FUNC 1, TRACK 2, PATTERN 3,
-  RETRIG 4, PRESET 5, PUNCH 6, RECORD 9, PAGE 15, trig keys 16-31,
-  DATA press 32. Event flags at +16: bit 0 down, bit 3 repeat.
+  RETRIG 4, PRESET 5, PUNCH 6, RECORD 9, RETURN 12, SETTINGS 13, PAGE 15,
+  trig keys 16-31,
+  DATA press 32. Event flags at +16: bit 0 down, bit 3 repeat, bit 4 click
+  (a short press, on release), bit 5 long press. Model-TG's chords use
+  SETTINGS as the modifier (`kh_mod`), leaving stock's TRACK chords alone.
 - **Knobs** carry their index at event+12: DATA 1, and the twelve parameter
   knobs 2-13 - panel knob n is index n + 1. This file and the user guide use
   the panel numbers. Clicks with acceleration: `0x4006f73a(event, slow, fast)`.
@@ -102,17 +105,17 @@ These were each verified on hardware; they save a lot of rediscovery.
 - Reverse playback: set Sample Start above Sample End. No extra parameter, and
   it p-locks per trig because both dials already do
 - Seven playback modes per track: One shot, Loop, Slice, Granular, Stretch,
-  Pluck and Wave (wavetable). Hold **Track** and press **Preset** to open the mode menu
+  Pluck and Wave (wavetable). Hold **Settings** and press **Preset** to open the mode menu
   - laid out like the machine page, the current mode's name in a panel and a
-  row of seven markers - turn any knob to choose, and Return, Preset or Track
+  row of seven markers - turn any knob to choose, and Return, Preset or Settings
   to close. The mode is stored in the sound name; one shot is the default. A loop returns to
   Sample Start, and composes with reverse. In the last three the four page dials
   take on new jobs (and labels), but stay the same parameters - so they p-lock,
   take LFOs and persist exactly as before
-- Per-mode options: hold **Track** and press **Punch** (key code 6) to open
+- Per-mode options: hold **Settings** and press **Punch** (key code 6) to open
   the current mode's settings list, laid out like Scale Setup: LEVEL/DATA
   moves between rows, a press edits one, and LEVEL/DATA then changes it.
-  Track or Return closes it. Everything is saved with the project.
+  Settings or Return closes it. Everything is saved with the project.
   **EFX**, **CHN** and **STU** belong to the track, not the mode, so they
   carry over when the mode changes.
   - One shot: **EFX** Filter, Lo-fi (Rate 48 kHz to ~1 kHz, Crush 16 bits
@@ -218,7 +221,7 @@ These were each verified on hardware; they save a lot of rediscovery.
   a tag in the top four bits. A value without the tag (any older project)
   loads the defaults. A track newly switched to the Sampler starts from the
   defaults
-- Resampling: hold **Track** and press **Record** (key code 9) for the Resample menu. **SRC** one
+- Resampling: hold **Settings** and press **Record** (key code 9) for the Resample menu. **SRC** one
   track dry (after its amp envelope, Attack and Filter; before pan, volume and
   the effect sends) or **MST**, the whole output, or **USB**, the computer's audio (USB mode A+M:
   UAC2 stereo 32-bit on iso endpoint 3, read each block by 0x40002ae0 into
@@ -291,13 +294,13 @@ These were each verified on hardware; they save a lot of rediscovery.
 - **Device Config > System**: a full-screen page with the audio load (CPU,
   now and as a bar), the worst block since it opened (PEAK), and sample
   memory - used of the region with a bar (RAM) and what is left (FREE).
-  Refreshed twice a second; Return, Preset or Track closes it. Turn DATA
+  Refreshed twice a second; Return, Preset or Settings closes it. Turn DATA
   right for a second page: each track's share of the block (T1-T6, tenths of
   a percent, from sampler_dispatch's per-track timer), TRACKS their sum,
   OTHER the rest (mixer, send effects, output, per-block hooks) and TOTAL.
   Built on the machine-page page the mode menu uses (kind MM_SYS), drawn by
   sys_render
-- Output retrig (beat repeat): hold **Track** and press **Retrig** for a
+- Output retrig (beat repeat): hold **Settings** and press **Retrig** for a
   full-screen page. The track pads choose which tracks it repeats (all lit
   at first); trig keys 1-16 repeat their output - 1/64 at step 1 up to a bar
   at step 16, straight and triplet divisions between. A repeat is locked to
@@ -306,7 +309,7 @@ These were each verified on hardware; they save a lot of rediscovery.
   Momentary (held; the newest held step wins, releasing falls back to one
   still held) or Latch (a press starts or switches, the same step stops);
   **FX RETURNS** OFF or ON (the delay and reverb returns repeated too). DATA
-  moves between the rows, a press edits one. Track, Retrig or Pattern closes
+  moves between the rows, a press edits one. Settings, Retrig or Pattern closes
   it and the repeat fades out. Each track (and a stereo track's side) keeps
   a 2.7 s 16-bit history, 4 MiB at the top of the sample region; repeats
   cross over live in 64 samples and each cycle is faded at its ends. A track
@@ -331,7 +334,7 @@ These were each verified on hardware; they save a lot of rediscovery.
   with the level) and 11 Vinyl (the Sampler's hiss and clicks, by Wear). Each
   is bypassed at 0; the bottom line shows a knob's value for a second. The
   effects outlive the page (and a pattern change); Return on the page, or
-  Track + Return anywhere ("Master FX off"), turns them all off. The pads'
+  Settings + Return anywhere ("Master FX off"), turns them all off. The pads'
   track selection is kept too
 - On the retrig page Return resets (the FX and a latched repeat) rather
   than closing; Pattern closes it so the pattern can be chosen as usual

@@ -125,15 +125,15 @@ if _direct!=1:
     raise SystemExit(f"{_direct} direct calls to the amp stage in the source; "
                      "only amp_hook itself may call it")
 print("  amp stage reached only through amp_hook")
-# key_hook's dispatch must END before the Track handler. Losing its rts made
-# every unrelated key fall through into kh_track and latch its own up/down
-# state as "Track held", so any key+Preset toggled the sampler mode.
-_disp=_txt[_txt.index('key_hook:'):_txt.index('kh_track:')]
+# key_hook's dispatch must END before the modifier's handler. Losing its rts
+# made every unrelated key fall through into it and latch its own up/down
+# state as "held", so any key+Preset toggled the sampler mode.
+_disp=_txt[_txt.index('key_hook:'):_txt.index('kh_mod:')]
 _code=[l.split('|')[0].strip() for l in _disp.split('\n')]
 _code=[l for l in _code if l]
 if _code[-1]!='rts':
-    raise SystemExit(f"key_hook's dispatch falls through into kh_track (last: {_code[-1]!r})")
-print("  key_hook dispatch ends before kh_track")
+    raise SystemExit(f"key_hook's dispatch falls through into kh_mod (last: {_code[-1]!r})")
+print("  key_hook dispatch ends before kh_mod")
 # dial_start/dial_end feed the slice window in sampler_render, which has no
 # trackData pointer of its own. They must be published BEFORE the slice-mode
 # skip in the window section, or slice mode never writes them and every slice

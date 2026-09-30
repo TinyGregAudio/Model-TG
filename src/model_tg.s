@@ -4188,7 +4188,7 @@ sampler_lfo_ids:
 | the same answer, and a first attempt that redirected only 0x4002ae90 changed
 | nothing on hardware, so the LED being complained about is painted by one of
 | the other two.
-| ===================== Track + Preset -> loop / one-shot ==================
+| ================ Settings + Preset -> the playback-mode menu ===============
 | Wraps 0x4007240c, the KeyEvent key-code accessor: a three-instruction leaf
 |     moveal %sp@(4),%a0 ; movel %a0@(12),%d0 ; rts
 | that every consumer of a key event calls, whatever view is on screen. That
@@ -4204,6 +4204,8 @@ sampler_lfo_ids:
 | d0/d1/a0/a1 are caller-saved, so d1/a1 are free; d0 is the accessor's result
 | and is preserved across the toggle.
 KEY_TRACK  = 2
+KEY_SETTINGS = 13      | measured (KeyProbe): the chords' modifier since
+                       | Model-TG moved them off Track, whose chords are stock's
 KEY_PRESET = 5
 KEY_PATTERN= 3         | measured: Track 2, Pattern 3, Preset 5, FUNC 1, PAGE 15
 KEY_OPTS   = 6         | measured: the options button (samplerEU's probe)
@@ -4221,27 +4223,47 @@ key_hook:
     tstl    sle_on
     bnew    kh_sle                | the slice editor: the trig keys play slices
 kh_norm:
-    cmpil   #KEY_TRACK,%d0
-    beqs    kh_track
+    cmpil   #KEY_SETTINGS,%d0
+    beqs    kh_mod
     cmpil   #KEY_PRESET,%d0
     beqs    kh_preset
-    lea.l   track_held,%a1
+    lea.l   set_held,%a1
     tstl    %a1@
     bnew    kh_other
     rts                           | every other key: nothing to do. This rts went
                                   | missing when the Pattern handler was reverted
                                   | in samplerEB, and every key then fell through
-                                  | into kh_track and latched ITS state as "Track
-                                  | held" - so FUNC+Preset, or any key+Preset,
-                                  | toggled the mode. The build now checks it.
+                                  | into the modifier's handler and latched ITS
+                                  | state as "held" - so FUNC+Preset, or any
+                                  | key+Preset, toggled the mode. The build now
+                                  | checks it.
 
-    | Track: remember whether it is down. One press is read many times, but
-    | every read of the same event carries the same flags, so this is idempotent.
-kh_track:
+    | SETTINGS, the chords' modifier: remember whether it is down. One press is
+    | read many times, but every read of the same event carries the same flags,
+    | so this is idempotent. Stock opens the Config Menu on its click (flag bit
+    | 4, on release) and asks "Save pattern" on its long press (bit 5 -
+    | 0x4001c54c, 0x40072444, 0x40039570). The long press is never passed on:
+    | holding SETTINGS for a chord must not raise that prompt. Its release is
+    | swallowed after a chord (mod_used), so the Config Menu does not follow;
+    | a plain tap passes and opens it as always.
+kh_mod:
     movel   %a0@(16),%d1
-    andil   #1,%d1
-    lea.l   track_held,%a1
+    btst    #5,%d1
+    bnes    kh_eat                | the long press: no Save pattern prompt
+    lea.l   set_held,%a1
+    btst    #0,%d1
+    beqs    kh_m_up
+    btst    #3,%d1
+    bnes    kh_m_dn
+    clrl    mod_used              | a fresh press: no chord yet
+kh_m_dn:
+    moveq   #1,%d1
     movel   %d1,%a1@
+    rts
+kh_m_up:
+    clrl    %a1@
+    tstl    mod_used
+    bnes    kh_eat                | after a chord: no Config Menu
     rts
 
 kh_preset:
@@ -4259,12 +4281,13 @@ kh_p_down:
     bnes    kh_eat                | a later read of a press already swallowed
     btst    #3,%d1
     bnes    kh_out                | auto-repeat, not a fresh press
-    lea.l   track_held,%a1
+    lea.l   set_held,%a1
     tstl    %a1@
     beqs    kh_out                | Preset alone: leave the machine page alone
     moveq   #1,%d1
     lea.l   kh_eaten,%a1
     movel   %d1,%a1@              | fire once per press, not once per read
+    movel   %d1,mod_used
     | ---- consume the press, so Preset's own action does not also run ----
     | Two mechanisms, because handlers differ in what they look at first. The
     | base dispatcher at 0x40075f3c calls the gate 0x400724a0 BEFORE it reads
@@ -4338,8 +4361,8 @@ krk_done:
     moveq   #0,%d0
     rts
 kh_rtg_n:
-    cmpil   #KEY_TRACK,%d0
-    beqw    kh_track
+    cmpil   #KEY_SETTINGS,%d0
+    beqw    kh_mod
     cmpil   #KEY_PATTERN,%d0      | Pattern held: the trig keys choose patterns
     bnes    krn_np
     moveq   #0,%d1
@@ -4534,7 +4557,7 @@ kso_eat:
     moveq   #0,%d0
     rts
 
-    | ---- Track + key 9: the Resample menu ----
+    | ---- Settings + Record (key 9): the Resample menu ----
     | Key 9 measured on hardware with samplerFG's probe. Press and release are
     | swallowed as the options chord's are, once the menu is up.
 kh_rs:
@@ -4568,12 +4591,13 @@ kh_r_down:
     lea.l   kh_eaten3,%a1
     moveq   #1,%d1
     movel   %d1,%a1@
+    movel   %d1,mod_used
     movel   %a0@(16),%d1
     oril    #8,%d1
     movel   %d1,%a0@(16)
     braw    kh_eat
 
-    | ---- Track + Return: the master FX off, from anywhere ----
+    | ---- Settings + Return: the master FX off, from anywhere ----
     | The retrig page's effects outlive it; this turns them all off (fading,
     | as Return on the page does) and says so. Press and release swallowed.
 kh_rx:
@@ -4587,13 +4611,14 @@ kh_rx:
     braw    kh_eat
 kh_x_down:
     btst    #3,%d1                | a fresh press acts even if an old flag was
-    beqs    kh_x_new              | left behind (Track let go before Return)
+    beqs    kh_x_new              | left behind (Settings let go before Return)
     tstl    %a1@
     bnew    kh_eat
     braw    kh_out
 kh_x_new:
     moveq   #1,%d1
     movel   %d1,%a1@
+    movel   %d1,mod_used
     movel   %a0@(16),%d1
     oril    #8,%d1
     movel   %d1,%a0@(16)
@@ -4605,7 +4630,7 @@ kh_x_new:
     movea.l %sp@+,%a0
     braw    kh_eat
 
-    | ---- Track + Retrig: the retrig page, its press and release swallowed ----
+    | ---- Settings + Retrig: the retrig page, its press and release swallowed ----
 kh_rt:
     movel   %a0@(16),%d1
     lea.l   kh_eaten4,%a1
@@ -4633,12 +4658,13 @@ kh_t_new:
     lea.l   kh_eaten4,%a1
     moveq   #1,%d1
     movel   %d1,%a1@
+    movel   %d1,mod_used
     movel   %a0@(16),%d1
     oril    #8,%d1
     movel   %d1,%a0@(16)
     braw    kh_eat
 
-    | ---- Track + key 6: the current mode's options menu ----
+    | ---- Settings + Punch (key 6): the current mode's options menu ----
     | Key 6 was measured on hardware with a probe build (samplerEU). The menu
     | only exists for One shot and Slice; for any other mode, or anything else
     | that stops it opening, the press is left alone, so key 6 keeps doing what
@@ -4672,6 +4698,7 @@ kh_o_open:
     lea.l   kh_eaten2,%a1
     moveq   #1,%d1
     movel   %d1,%a1@
+    movel   %d1,mod_used
     movel   %a0@(16),%d1
     oril    #8,%d1
     movel   %d1,%a0@(16)
@@ -6836,23 +6863,26 @@ gm_done:
     unlk    %fp
     rts
 
-| ---- keys: Track closes, as it does the mode and options menus ----
-| (view, event), from slot 2 of the view's vtable (gm_vvt). A fresh Track press
-| (down, not a repeat: 0x400724a0) closes the menu through 0x40075ba6 - what
-| the list's own key handler calls for Return - and is reported used. Track's
-| release, like every other key, goes on to the stock handler thunk 0x4007598e
-| unchanged, so the main screen still sees it and the Track LED goes out.
+| ---- keys: Settings closes, as it does the mode menu and our pages ----
+| (view, event), from slot 2 of the view's vtable (gm_vvt). A fresh Settings
+| press (down, not a repeat: 0x400724a0) closes the menu through 0x40075ba6 -
+| what the list's own key handler calls for Return - and is reported used;
+| its release is swallowed (mod_used, kh_mod), so the Config Menu does not
+| open behind it. Every other key goes on to the stock handler thunk
+| 0x4007598e unchanged.
 gm_key_th:
     movel   %sp@(8),%sp@-
     jsr     0x4007240c
     addql   #4,%sp
-    cmpil   #KEY_TRACK,%d0
+    cmpil   #KEY_SETTINGS,%d0
     bnes    gm_k_stock
     movel   %sp@(8),%sp@-
     jsr     0x400724a0            | down and not a repeat
     addql   #4,%sp
     tstb    %d0
     beqs    gm_k_stock
+    moveq   #1,%d0
+    movel   %d0,mod_used
     movel   %sp@(4),%d0
     subil   #0x38,%d0             | the menu object
     movel   %d0,%sp@-
@@ -7719,7 +7749,7 @@ gm_v_off:      .asciz "OFF"
 gm_v_on:       .asciz "ON"
     .align 4
 
-| ============== Track + Preset: the playback-mode menu ======================
+| ============== Settings + Preset: the playback-mode menu ===================
 | A page built from the stock machine-select page ("DrumSelect", ctor
 | 0x400a22b0, 0xd0 bytes, vtable group 0x40117918..0x401179c8), drawn and
 | driven by our own handlers. Construction, the view stack and destruction are
@@ -7741,8 +7771,8 @@ MM_RTG    = 4                     | mm_kind: the retrig page (rtg_render)
 MM_SLE    = 5                     | mm_kind: the slice editor (sle_render)
 MM_VT_SRC = 0x40117918
 MM_VT_LEN = 0xb0
-| The page serves three menus: kind 0 the playback mode (Track + Preset), and
-| on Track + key 6 the current mode's options - kind 1 for Slice (count and
+| The page serves three menus: kind 0 the playback mode (Settings + Preset),
+| and on Settings + Punch the current mode's options - kind 1 for Slice (count and
 | detection), kind 2 for One shot (Normal / Lo-fi). Other modes have none, and
 | key 6 then does what it always did. mm_opened says whether a menu came up.
 mode_menu_open:
@@ -7893,16 +7923,16 @@ mm_dtor1:
     jsr     sle_close
     jmp     0x400f4486
 
-| ---- keys: Return, Preset or Track closes; the rest is the stock base's ----
+| ---- keys: Return, Preset or Settings closes; the rest is the stock base's ----
 | (this, event).
 | Return (code 12) is handled exactly as the machine page handles it
 | (0x400a292c): the page closes when the event has flag bit 4 (0x40072434),
 | and the key is reported used either way.
-| Preset and Track close on a fresh press only (down, not a repeat:
-| 0x400724a0). Every other Preset/Track event - above all Track's RELEASE after
-| the chord that opened the menu - goes to the stock dispatch like any other
-| key. Claiming those left the main screen waiting for a Track release that
-| never came, so its Track LED stayed lit. A Preset press swallowed by the
+| Preset and Settings close on a fresh press only (down, not a repeat:
+| 0x400724a0). Every other Preset/Settings event goes to the stock dispatch
+| like any other key (claiming Track's release, when Track was the modifier,
+| left the main screen waiting for it and its LED lit); kh_mod swallows the
+| Settings release that follows a close, so the Config Menu stays shut. A Preset press swallowed by the
 | chord reads back as code 0, so the press that opened the menu cannot close it.
 MM_KEY_RETURN = 12
 MM_KEY_DATA   = 32  | the DATA knob's press: the stock list (0x40075822)
@@ -7963,7 +7993,7 @@ mm_k_nrt:
     beqs    mm_k_ret
     cmpil   #KEY_PRESET,%d0
     beqs    mm_k_press
-    cmpil   #KEY_TRACK,%d0
+    cmpil   #KEY_SETTINGS,%d0     | Settings, the chords' modifier, closes too
     beqs    mm_k_press
 mm_k_stock:
     movel   %d2,%sp@-
@@ -8004,6 +8034,8 @@ mm_k_press:
     tstb    %d0
     beqs    mm_k_stock            | a release or a repeat: not ours
 mm_k_close:
+    moveq   #1,%d0                | a Settings release after this is not a
+    movel   %d0,mod_used          | tap: no Config Menu behind the page
     movea.l %a2@,%a0
     movel   %a2,%sp@-
     movea.l %a0@(0x28),%a0        | close, as the stock page does
@@ -8576,11 +8608,12 @@ sp_out:
 
     .balign 4
 popup_mult:    .long 0   | show_popup: 0 = the stock stay, else N times it
-track_held:    .long 0
+set_held:      .long 0   | SETTINGS is down (the chords' modifier)
+mod_used:      .long 0   | a chord fired since SETTINGS went down
 kh_eaten:      .long 0   | a Preset press swallowed by the chord
 kh_eaten3:     .long 0   | a resample test press swallowed by the chord
 kh_eaten4:     .long 0   | a Retrig press swallowed by the chord
-kh_eaten5:     .long 0   | a Return press swallowed by Track + Return
+kh_eaten5:     .long 0   | a Return press swallowed by Settings + Return
 kh_eaten2:     .long 0   | an options-menu press swallowed by the chord
 loop_mode:     .long 0,0,0,0,0,0,0   | per track, 1 = loop; one-shot is default
 msg_loop:      .asciz "Loop"
@@ -11246,14 +11279,14 @@ ih2:
     jmp     0x40084c1a
 
 | ============== Retrig: beat-repeat on the tracks' output ====================
-| Track + Retrig opens a full-screen page (the machine-page page, kind MM_RTG).
+| Settings + Retrig opens a full-screen page (the machine-page page, kind MM_RTG).
 | While it is up the track pads choose the tracks it acts on (all, to start)
 | and trig keys 1..16 repeat them: step 1 the shortest slice, step 16 a bar.
 | Momentary (held; the newest held step wins, and letting it go falls back to
 | the one still held) or Latch (a press starts or switches, the same step
 | again stops). The options are a list: DATA moves between Mode and FX
 | returns (delay and reverb repeated too), its press edits the row (turn to
-| change, press again to leave). Track, Retrig or Return closes it.
+| change, press again to leave). Settings, Retrig or Pattern closes it.
 |
 | The audio: every block, after the voices and before the mixer (sx_gain),
 | each track's channel - and the side of a stereo Sampler track - goes into a
@@ -11277,7 +11310,7 @@ RTG_REDRAW = 150                  | blocks: the page ten times a second
 RTG_STEP   = 1024                 | wet ramp: 64 samples end to end, Q16
 RTG_QN     = 21600000             | a quarter note on the audio clock
 
-| rtg_open: from Track + Retrig. The histories start silent; every track on.
+| rtg_open: from Settings + Retrig. The histories start silent; every track on.
 rtg_open:
     tstl    mm_obj
     bnew    rgo_out               | a page is up already
@@ -11784,7 +11817,7 @@ rgq_o:
 | the retrig repeats and before the mixer and the delay/reverb sends, so the
 | sends hear them. Knob indices (event +12): 2 Drive, 3 Crush, 4 Rate, 6
 | Filter, 7 Resonance, 10 Gate, 11 Tape stop (samplerID: Filter and
-| Resonance). The effects outlive the page: closed (Track, Retrig, or Pattern
+| Resonance). The effects outlive the page: closed (Settings, Retrig, or Pattern
 | for a pattern change) they carry on, and opening it again shows them as
 | they are; Return turns them all off, each fading (mfx_wet, 64 samples).
 | Filter: a 2-pole state-variable filter in its topology-preserving form
@@ -13515,7 +13548,7 @@ rtg_env:       .space 128         | ...and the fade there, Q16
 |   RAM   sample memory in use (every resident slot) of the region, a bar
 |   FREE  what is left
 | Turning DATA right shows a second page, each track's share (sys_r2), and
-| left comes back. Return, Preset or Track closes it; the page only redraws
+| left comes back. Return, Preset or Settings closes it; the page only redraws
 | on request, so sys_tick asks twice a second.
 SYS_REDRAW = 750                  | blocks: half a second
 SLE_REDRAW = 75                   | blocks: the tap playhead, 20 times a second
@@ -15876,7 +15909,7 @@ rw_msg:
 rw_out:
     rts
 
-| ---- the Resample menu (Track + key 9) -------------------------------------
+| ---- the Resample menu (Settings + Record) ---------------------------------
 | The Granular menu's list, with its own rows: SRC (T1..T6, MST = the whole
 | output), LEN (1/2/4/8/16 bars or MAN), STA (PAT = the top of the pattern, NOW,
 | SND = the source's first sound) and REC, whose press arms, stops, or cancels

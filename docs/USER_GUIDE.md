@@ -4,6 +4,10 @@ Everything Model-TG adds to the Model:Cycles, and how to play it. To install,
 see [BUILD.md](BUILD.md).
 
 Button names are in **BOLD CAPS**; "hold A + B" means hold A and press B.
+
+Model-TG's own pages open with **SETTINGS** held, so the stock **TRACK**
+combinations keep working. Tapping **SETTINGS** on its own still opens the
+Config Menu. Holding it no longer brings up the *Save pattern* prompt.
 The twelve parameter knobs are numbered 1 to 12.
 
 **Contents**
@@ -66,8 +70,8 @@ tracks and patterns that use the same file.
 
 ## Playback modes
 
-Hold **TRACK** + **PRESET** to open the mode menu, turn any knob to choose,
-and press **TRACK**, **PRESET** or return to close it. The mode is saved per
+Hold **SETTINGS** + **PRESET** to open the mode menu, turn any knob to choose,
+and press **SETTINGS**, **PRESET** or return to close it. The mode is saved per
 track.
 
 | mode | what it does | the four page knobs |
@@ -82,9 +86,9 @@ track.
 
 ## Mode options
 
-Hold **TRACK** + **PUNCH** for the current mode's settings. Turn **DATA**
+Hold **SETTINGS** + **PUNCH** for the current mode's settings. Turn **DATA**
 to move between rows, press it to edit a row, turn to change it, and press
-**TRACK** or return to close. Everything is saved with the project.
+**SETTINGS** or return to close. Everything is saved with the project.
 **EFX**, **CHN** and **STU** belong to the track, so they carry over when you
 change mode.
 
@@ -135,7 +139,7 @@ slice, and *SLICE n/total* with its start time.
 | knob 3 | zoom in and out around the selected start |
 | **DATA** press | split the selected slice in two |
 | **FUNC** + **DATA** press | remove the selected slice's marker (it joins the one before) |
-| return, **TRACK** or **PRESET** | close |
+| return, **SETTINGS** or **PRESET** | close |
 
 Slice 1 always starts at the sample's start, and slices are at least 64
 samples long.
@@ -165,7 +169,7 @@ using that sample gets the same slices. They are saved in the Cycles' internal s
 
 ## Resampling
 
-Hold **TRACK** + **RECORD** for the Resample menu. The take becomes the
+Hold **SETTINGS** + **RECORD** for the Resample menu. The take becomes the
 sample of the track you opened the menu on.
 
 | row | settings |
@@ -194,7 +198,7 @@ channels are the same is kept as mono. Note that stereo play is very CPU intensi
 
 ## Retrig and master FX
 
-Hold **TRACK** + **RETRIG** for the retrig page.
+Hold **SETTINGS** + **RETRIG** for the retrig page.
 
 - **Repeats:** hold a trig key to repeat the output: key 1 is 1/64 and key 16
   is a bar, with straight and triplet divisions between. Repeats lock to the
@@ -205,7 +209,7 @@ Hold **TRACK** + **RETRIG** for the retrig page.
 - **FX RETURNS** row: whether the delay and reverb returns repeat too.
 - Turn **DATA** to move between the rows and press it to change one.
 - Return on this page **resets** the master FX and a latched repeat.
-  **TRACK** or **RETRIG** closes the page; **PATTERN** closes it so you can
+  **SETTINGS** or **RETRIG** closes the page; **PATTERN** closes it so you can
   choose a pattern.
 
 ### Master FX (the knobs on the retrig page)
@@ -229,7 +233,7 @@ Each is off at 0, and the bottom line shows a knob's value as you turn it.
 | 12 | **Flanger:** swept once a bar |
 
 The master FX stay on after you close the page, and through pattern changes.
-**TRACK + return** from anywhere turns them all off (*Master FX off*).
+**SETTINGS** + return from anywhere turns them all off (*Master FX off*).
 
 ## Additions for every machine
 
@@ -265,7 +269,7 @@ it.**
 
 **Device Config > System** shows the audio CPU load (now and at its worst)
 and sample memory used and free. Turn **DATA** right for each track's share
-of the CPU. Return, **PRESET** or **TRACK** closes it.
+of the CPU. Return, **PRESET** or **SETTINGS** closes it.
 
 ## Tweaks from elektron-model-tweaks
 
@@ -291,11 +295,11 @@ are included (build with `--no-tweaks` to leave them out):
 
 | where | buttons | does |
 |---|---|---|
-| anywhere | **TRACK** + **PRESET** | playback mode menu (Sampler track) |
-| anywhere | **TRACK** + **PUNCH** | the mode's options |
-| anywhere | **TRACK** + **RECORD** | Resample menu |
-| anywhere | **TRACK** + **RETRIG** | retrig page and master FX |
-| anywhere | **TRACK** + return | master FX off |
+| anywhere | **SETTINGS** + **PRESET** | playback mode menu (Sampler track) |
+| anywhere | **SETTINGS** + **PUNCH** | the mode's options |
+| anywhere | **SETTINGS** + **RECORD** | Resample menu |
+| anywhere | **SETTINGS** + **RETRIG** | retrig page and master FX |
+| anywhere | **SETTINGS** + return | master FX off |
 | anywhere | **PRESET** + Decay / Sweep / Contour | Attack / Filter / Resonance |
 | browser | pick a sample file | load it onto the Sampler track |
 | step held | **PRESET**, pick a sample | sample lock |
