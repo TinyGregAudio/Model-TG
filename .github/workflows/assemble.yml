@@ -1,0 +1,22 @@
+name: assemble
+
+# Assembles, links and self-checks src/ on every push and pull request.
+# No stock firmware is needed (or allowed) here, so this cannot produce a
+# flashable image - that is built locally from your own OS (docs/BUILD.md).
+on:
+  push:
+  pull_request:
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ColdFire binutils
+        run: sudo apt-get update && sudo apt-get install -y binutils-m68k-linux-gnu
+      - name: Assemble and self-check
+        run: python3 build.py --assemble-only
+      - name: Generated tables are up to date
+        run: |
+          python3 tools/gen_granular_tables.py
+          git diff --exit-code src/granular_tables.inc

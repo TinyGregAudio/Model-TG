@@ -1,0 +1,10 @@
+# Build output and your stock firmware stay out of the repository:
+# nothing of Elektron's may be committed.
+build/
+*.syx
+*.bin
+!src/sampler_icons/*.bin
+*.o
+*.elf
+__pycache__/
+.DS_Store

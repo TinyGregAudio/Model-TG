@@ -1,0 +1,60 @@
+| Our parameter labels. These used to live at the tail of param_table.inc;
+| the table itself is gone (it is the stock one at 0x4010dce0, patched in
+| place by the build script), but the strings are ours and stay in the blob.
+    .align 2
+str_start:    .asciz "Sample Start"
+str_end:      .asciz "Sample End"
+str_flt:      .asciz "Filter"
+str_res:      .asciz "Res"
+str_cat:      .asciz "Sample"
+str_startsh:  .asciz "STRT"
+str_endsh:    .asciz "END"
+str_fltsh:    .asciz "FLTR"
+str_ressh:    .asciz "RES"
+    .align 2
+str_gpos:     .asciz "Position"
+str_gsize:    .asciz "Grain Size"
+str_gdens:    .asciz "Density"
+str_gspr:     .asciz "Spray"
+str_gcat:     .asciz "Grain"
+str_gpossh:   .asciz "POS"
+str_gsizesh:  .asciz "SIZE"
+str_gdenssh:  .asciz "DENS"
+str_gsprsh:   .asciz "SPRY"
+    .align 2
+str_gspd:     .asciz "Speed"
+str_gspdsh:   .asciz "SPD"
+str_gscat:    .asciz "Stretch"
+    .align 2
+str_ppos:     .asciz "Strike Pos"
+str_plen:     .asciz "Strike Len"
+str_ptone:    .asciz "Tone"
+str_pfb:      .asciz "Feedback"
+str_pcat:     .asciz "Pluck"
+str_ppossh:   .asciz "POS"
+str_plensh:   .asciz "STRK"
+str_ptonesh:  .asciz "TONE"
+str_pfbsh:    .asciz "FDBK"
+    .align 2
+str_wpos:     .asciz "Wave Pos"
+str_wsize:    .asciz "Frame Size"
+str_wsmth:    .asciz "Smooth"
+str_wdet:     .asciz "Detune"
+str_wcat:     .asciz "Wave"
+str_wpossh:   .asciz "POS"
+str_wsizesh:  .asciz "SIZE"
+str_wsmthsh:  .asciz "SMTH"
+str_wdetsh:   .asciz "DTUN"
+    .align 2
+str_lrate:    .asciz "Rate"
+str_lcrsh:    .asciz "Crush"
+str_lcat:     .asciz "Lo-fi"
+str_lratesh:  .asciz "RATE"
+str_lcrshsh:  .asciz "CRSH"
+    .align 2
+str_tvtone:   .asciz "Tone"
+str_tvwear:   .asciz "Wear"
+str_tvcat:    .asciz "Sample"
+str_tvtonesh: .asciz "TONE"
+str_tvwearsh: .asciz "WEAR"
+    .align 2
