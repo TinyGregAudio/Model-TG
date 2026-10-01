@@ -34,9 +34,10 @@ _ap.add_argument("--tool", default=os.environ.get("ELEKTRON_FIRMWARE_TOOL",
                  "elektron-firmware-tool"), help="path to elektron-firmware-tool")
 _ap.add_argument("--no-tweaks", action="store_true",
                  help="leave out the vendored tweaks (tweaks/)")
-_ap.add_argument("--payload", metavar="FILE",
-                 help="also write a payload: the changes to stock, for flashers that "
-                      "patch the user's own OS (docs/PAYLOAD.md)")
+_ap.add_argument("--modded-cycles", metavar="FILE",
+                 help="also write Model-TG as a tweak file for the Modded-Cycles web "
+                      "flasher (docs/PAYLOAD.md); it contains stock bytes, so it is "
+                      "never committed or attached to a release")
 _ap.add_argument("--assemble-only", action="store_true",
                  help="assemble, link and self-check src/ only - no stock firmware needed")
 args=_ap.parse_args()
@@ -733,44 +734,63 @@ open(out,'wb').write(d)
 assert end % 16 == 0, f"reserved_end 0x{end:08x} is not 16-byte aligned"
 print(f"  blob {len(blob):,} B, image {len(d):,} B, reserved_end 0x{end:08x} (16-aligned)")
 
-# ---- the payload: Model-TG as changes to stock (docs/PAYLOAD.md) ----------
-# Everything that differs from stock inside the stock section, as runs of new
-# bytes, and everything appended after it (the zero gap and our blob). No
-# stock bytes are in it: a flasher checks the whole stock section against
-# STOCK_SHA256 instead, then the result against result_sha256. It is
-# re-applied to stock here and must reproduce this image exactly.
-if args.payload:
+# ---- the MAIN OS hash, for the release notes ------------------------------
+RESULT_SHA256=hashlib.sha256(bytes(d)).hexdigest()
+print(f"  MAIN OS sha256 {RESULT_SHA256}")
+
+# ---- Model-TG as a Modded-Cycles tweak (docs/PAYLOAD.md) -------------------
+# The format of 18nelli18/Modded-Cycles' tweaks/: writes of {off, old, new}
+# over the stock section - "old" being the stock bytes each replaces, which
+# its applyWrites checks - and one "append" whose single hex part is
+# everything after the stock section (the zero gap and our blob). Because of
+# "old" the file holds stock bytes: it is generated from the user's own
+# stock here, by whoever hosts it, and never committed or attached to a
+# release. It is replayed the way that builder does before it is written,
+# and must reproduce this image exactly.
+if args.modded_cycles:
     import json as _pjson
     _st=bytes(_stock); _img=bytes(d)
-    _runs=[]; _i=0
+    _writes=[]; _i=0
     while _i<len(_st):
         if _img[_i]!=_st[_i]:
             _j=_i
             while _j<len(_st) and _img[_j]!=_st[_j]: _j+=1
-            _runs.append({"off":_i,"new":_img[_i:_j].hex()}); _i=_j
+            _writes.append({"off":_i,"old":_st[_i:_j].hex(),"new":_img[_i:_j].hex()}); _i=_j
         else: _i+=1
     try:
         _ver=subprocess.run(["git","describe","--tags","--always","--dirty"],cwd=REPO,
                             capture_output=True,text=True,check=True).stdout.strip()
     except Exception:
         _ver="unknown"
-    _pl={"format":"model-tg-payload/1","name":"Model-TG","version":_ver,
+    _at=f"0x{BASE+len(_st):08x}"
+    _tail=_img[len(_st):]
+    _tw={"id":"model-tg","order":30,
+         "name":f"Model-TG {_ver}",
+         "description":["Model-TG: the Sampler machine, resampling, retrig and master FX, and more.",
+                        "Source, user guide and license: https://github.com/TinyGregAudio/Model-TG",
+                        "MIT licensed (c) TinyGregAudio. Unofficial, not affiliated with Elektron."],
+         "version":_ver,"source":"https://github.com/TinyGregAudio/Model-TG",
          "device":"Model:Cycles","os":"1.13","section":3,
-         "stock_len":len(_st),"stock_sha256":STOCK_SHA256,
-         "result_len":len(_img),"result_sha256":hashlib.sha256(_img).hexdigest(),
-         "writes":_runs,
-         "append":{"off":len(_st),"data":_img[len(_st):].hex()}}
-    _chk=bytearray(_st)                        # replay it onto stock
-    for _w in _pl["writes"]:
-        _b=bytes.fromhex(_w["new"]); _chk[_w["off"]:_w["off"]+len(_b)]=_b
-    _chk+=bytes.fromhex(_pl["append"]["data"])
-    assert bytes(_chk)==_img, "payload does not reproduce the image"
-    assert hashlib.sha256(_chk).hexdigest()==_pl["result_sha256"]
-    with open(args.payload,'w') as _f:
-        _pjson.dump(_pl,_f,indent=1); _f.write("\n")
-    print(f"  payload {args.payload}: {len(_runs)} writes "
-          f"({sum(len(w['new'])//2 for w in _runs):,} B) + {len(_img)-len(_st):,} B appended, "
-          f"reproduces the image; result sha256 {_pl['result_sha256']}")
+         "result_sha256":RESULT_SHA256,
+         "conflicts":["latching-mute","trig-preview","browser-scroll"],
+         "writes":_writes,
+         "append":{"at":_at,"dest":_at,"size":len(_tail),
+                   "parts":[{"dest":_at,"hex":_tail.hex()}],"reloc":[]}}
+    _chk=bytearray(_st)                        # replayed as Modded-Cycles builds
+    for _w in _tw["writes"]:
+        _o=_w["off"]; _old=bytes.fromhex(_w["old"]); _new=bytes.fromhex(_w["new"])
+        assert bytes(_chk[_o:_o+len(_old)])==_old, f"old bytes at {_o} are not stock"
+        _chk[_o:_o+len(_new)]=_new
+    _ap2=bytearray(_tw["append"]["size"])
+    for _p in _tw["append"]["parts"]:
+        _b=bytes.fromhex(_p["hex"]); _q=int(_p["dest"],16)-int(_tw["append"]["dest"],16)
+        _ap2[_q:_q+len(_b)]=_b
+    _chk+=_ap2
+    assert bytes(_chk)==_img, "the tweak does not reproduce the image"
+    with open(args.modded_cycles,'w') as _f:
+        _pjson.dump(_tw,_f,indent=1); _f.write("\n")
+    print(f"  Modded-Cycles tweak {args.modded_cycles}: {len(_writes)} writes, "
+          f"{len(_tail):,} B appended at {_at}; reproduces the image")
 
 # ---- repack: the patched section 3 back into YOUR stock .syx ---------------
 subprocess.run([args.tool,"-i",args.stock,"-c","3",out,"-o",args.out],

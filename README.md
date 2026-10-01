@@ -46,10 +46,7 @@ python3 build.py --stock path/to/model-cycles_OS1.13.syx
 Then install `Model-TG.syx` like an official OS update. The tools you need,
 and how to go back to stock, are in **[docs/BUILD.md](docs/BUILD.md)**.
 
-No toolchain? Each [release](https://github.com/TinyGregAudio/Model-TG/releases)
-has a payload that patches your own stock OS: Model-TG's code only, never
-Elektron's. See [Without a toolchain](docs/BUILD.md#without-a-toolchain) and
-[docs/PAYLOAD.md](docs/PAYLOAD.md).
+No toolchain? See [Without a toolchain](docs/BUILD.md#without-a-toolchain).
 
 ## Contributing
 

@@ -41,33 +41,29 @@ Options:
 | `--out FILE` | where to write the firmware (default `Model-TG.syx`) |
 | `--tool PATH` | the `elektron-firmware-tool` to use |
 | `--no-tweaks` | leave out the third-party tweaks in `tweaks/` |
-| `--payload FILE` | also write the release payload ([PAYLOAD.md](PAYLOAD.md)) |
+| `--modded-cycles FILE` | also write Model-TG as a tweak for the Modded-Cycles web flasher ([PAYLOAD.md](PAYLOAD.md)) |
 | `--assemble-only` | assemble, link and self-check `src/` without any stock firmware (what CI runs) |
 
 The build also checks that your stock OS really is the unmodified OS 1.13
 before changing anything.
 
-## Without a toolchain
-
-Each [release](https://github.com/TinyGregAudio/Model-TG/releases) has a
-payload attached: Model-TG as changes to the stock OS, containing no Elektron
-code. A web flasher that supports it can install Model-TG straight from your
-own stock `.syx`, or you can apply it yourself with Python and
-`elektron-firmware-tool` only:
-
-```sh
-python3 tools/apply_payload.py --stock path/to/model-cycles_OS1.13.syx \
-    --payload Model-TG-<version>.payload.json
-```
-
-It checks your stock OS first and the result afterwards, and writes
-`Model-TG.syx`.
+Every build prints the **MAIN OS sha256** of the result. Each
+[release](https://github.com/TinyGregAudio/Model-TG/releases) lists that hash
+in its notes, so you can check that your build matches.
 
 The build refuses to produce an image if anything is off: every stock byte it
 patches is checked first, so a different OS version fails instead of
 producing a broken firmware. It also checks its own output: stack frames,
 branch targets, the blob's placement and size, and more (see
 [INTERNALS.md](INTERNALS.md)).
+
+## Without a toolchain
+
+Model-TG may be offered by the third-party
+[Modded-Cycles](https://github.com/18nelli18/Modded-Cycles) web flasher, which
+builds it in the browser from your own stock OS. It is separate from this
+project; a build from it matches a release when its MAIN OS hash is the one in
+that release's notes. See [PAYLOAD.md](PAYLOAD.md).
 
 ## Install
 

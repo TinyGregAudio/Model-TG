@@ -66,19 +66,18 @@ replaces.
 ## Making a release
 
 1. Tag the commit: `git tag v<version>`, then `git push --tags`.
-2. Build it with its payload:
+2. Build it from a clean checkout of the tag:
 
    ```sh
-   python3 build.py --stock path/to/model-cycles_OS1.13.syx \
-       --payload Model-TG-v<version>.payload.json
+   python3 build.py --stock path/to/model-cycles_OS1.13.syx
    ```
 
-   The payload's `version` must be the tag, not `…-dirty`: build from a
-   clean checkout of the tag.
-3. On GitHub, create a release from the tag. Attach the payload, and put its
-   `result_sha256` (printed by the build) in the release notes.
+3. On GitHub, create a release from the tag, and put the **MAIN OS sha256**
+   the build printed in the release notes. Anyone building or hosting it
+   elsewhere (see [docs/PAYLOAD.md](docs/PAYLOAD.md)) checks against that.
 
-Never attach a `.syx` or `.bin`: those contain Elektron's firmware.
+Attach nothing: a `.syx`, `.bin` or tweak file all contain Elektron's
+firmware bytes.
 
 ## Reporting bugs
 
