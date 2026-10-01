@@ -41,7 +41,27 @@ Options:
 | `--out FILE` | where to write the firmware (default `Model-TG.syx`) |
 | `--tool PATH` | the `elektron-firmware-tool` to use |
 | `--no-tweaks` | leave out the third-party tweaks in `tweaks/` |
+| `--payload FILE` | also write the release payload ([PAYLOAD.md](PAYLOAD.md)) |
 | `--assemble-only` | assemble, link and self-check `src/` without any stock firmware (what CI runs) |
+
+The build also checks that your stock OS really is the unmodified OS 1.13
+before changing anything.
+
+## Without a toolchain
+
+Each [release](https://github.com/TinyGregAudio/Model-TG/releases) has a
+payload attached: Model-TG as changes to the stock OS, containing no Elektron
+code. A web flasher that supports it can install Model-TG straight from your
+own stock `.syx`, or you can apply it yourself with Python and
+`elektron-firmware-tool` only:
+
+```sh
+python3 tools/apply_payload.py --stock path/to/model-cycles_OS1.13.syx \
+    --payload Model-TG-<version>.payload.json
+```
+
+It checks your stock OS first and the result afterwards, and writes
+`Model-TG.syx`.
 
 The build refuses to produce an image if anything is off: every stock byte it
 patches is checked first, so a different OS version fails instead of

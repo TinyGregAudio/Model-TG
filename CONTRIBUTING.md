@@ -63,6 +63,23 @@ replaces.
   wraps and what was verified on hardware. Keep doing that: it is the only
   map anyone has.
 
+## Making a release
+
+1. Tag the commit: `git tag v<version>`, then `git push --tags`.
+2. Build it with its payload:
+
+   ```sh
+   python3 build.py --stock path/to/model-cycles_OS1.13.syx \
+       --payload Model-TG-v<version>.payload.json
+   ```
+
+   The payload's `version` must be the tag, not `…-dirty`: build from a
+   clean checkout of the tag.
+3. On GitHub, create a release from the tag. Attach the payload, and put its
+   `result_sha256` (printed by the build) in the release notes.
+
+Never attach a `.syx` or `.bin`: those contain Elektron's firmware.
+
 ## Reporting bugs
 
 Use the bug report template: the commit you built, the build's last lines

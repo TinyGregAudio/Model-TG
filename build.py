@@ -22,6 +22,8 @@ Layout of the image:
 import struct, subprocess, sys, os, argparse, shutil, hashlib
 BASE=0x40000400
 STOCK_END=0x401aa140          # where stock Cycles OS 1.13 ends
+# section 3 (MAIN OS) of the unmodified model-cycles_OS1.13.syx, decompressed
+STOCK_SHA256="cc99d4f0175d34d1e91d046e6ec85a5e8ab58ab9edbb3c24406acd48cb99ee98"
 REPO=os.path.dirname(os.path.abspath(__file__))
 _ap=argparse.ArgumentParser(description="Build Model-TG from your own stock "
                             "Model:Cycles OS 1.13 firmware.")
@@ -32,6 +34,9 @@ _ap.add_argument("--tool", default=os.environ.get("ELEKTRON_FIRMWARE_TOOL",
                  "elektron-firmware-tool"), help="path to elektron-firmware-tool")
 _ap.add_argument("--no-tweaks", action="store_true",
                  help="leave out the vendored tweaks (tweaks/)")
+_ap.add_argument("--payload", metavar="FILE",
+                 help="also write a payload: the changes to stock, for flashers that "
+                      "patch the user's own OS (docs/PAYLOAD.md)")
 _ap.add_argument("--assemble-only", action="store_true",
                  help="assemble, link and self-check src/ only - no stock firmware needed")
 args=_ap.parse_args()
@@ -199,6 +204,10 @@ if args.assemble_only:
     print(f"  assembled, linked and self-checked: {len(blob):,} B blob (no image built)")
     sys.exit(0)
 _stock=bytearray(open(STOCK_BIN,'rb').read())
+if hashlib.sha256(_stock).hexdigest()!=STOCK_SHA256:
+    raise SystemExit("this is not the stock Model:Cycles OS 1.13 main OS (its sha256 is "
+                     f"{hashlib.sha256(_stock).hexdigest()}) - use the unmodified "
+                     "model-cycles_OS1.13.syx from elektron.se")
 assert BASE+len(_stock)==STOCK_END, (hex(BASE+len(_stock)), "unexpected stock size")
 d=_stock+bytearray(BLOB-STOCK_END)+blob
 end=BASE+len(d)
@@ -723,6 +732,45 @@ print(f"  reserved {nres} of 16 cache blocks; blob ends 0x{end:08x}, limit 0x{li
 open(out,'wb').write(d)
 assert end % 16 == 0, f"reserved_end 0x{end:08x} is not 16-byte aligned"
 print(f"  blob {len(blob):,} B, image {len(d):,} B, reserved_end 0x{end:08x} (16-aligned)")
+
+# ---- the payload: Model-TG as changes to stock (docs/PAYLOAD.md) ----------
+# Everything that differs from stock inside the stock section, as runs of new
+# bytes, and everything appended after it (the zero gap and our blob). No
+# stock bytes are in it: a flasher checks the whole stock section against
+# STOCK_SHA256 instead, then the result against result_sha256. It is
+# re-applied to stock here and must reproduce this image exactly.
+if args.payload:
+    import json as _pjson
+    _st=bytes(_stock); _img=bytes(d)
+    _runs=[]; _i=0
+    while _i<len(_st):
+        if _img[_i]!=_st[_i]:
+            _j=_i
+            while _j<len(_st) and _img[_j]!=_st[_j]: _j+=1
+            _runs.append({"off":_i,"new":_img[_i:_j].hex()}); _i=_j
+        else: _i+=1
+    try:
+        _ver=subprocess.run(["git","describe","--tags","--always","--dirty"],cwd=REPO,
+                            capture_output=True,text=True,check=True).stdout.strip()
+    except Exception:
+        _ver="unknown"
+    _pl={"format":"model-tg-payload/1","name":"Model-TG","version":_ver,
+         "device":"Model:Cycles","os":"1.13","section":3,
+         "stock_len":len(_st),"stock_sha256":STOCK_SHA256,
+         "result_len":len(_img),"result_sha256":hashlib.sha256(_img).hexdigest(),
+         "writes":_runs,
+         "append":{"off":len(_st),"data":_img[len(_st):].hex()}}
+    _chk=bytearray(_st)                        # replay it onto stock
+    for _w in _pl["writes"]:
+        _b=bytes.fromhex(_w["new"]); _chk[_w["off"]:_w["off"]+len(_b)]=_b
+    _chk+=bytes.fromhex(_pl["append"]["data"])
+    assert bytes(_chk)==_img, "payload does not reproduce the image"
+    assert hashlib.sha256(_chk).hexdigest()==_pl["result_sha256"]
+    with open(args.payload,'w') as _f:
+        _pjson.dump(_pl,_f,indent=1); _f.write("\n")
+    print(f"  payload {args.payload}: {len(_runs)} writes "
+          f"({sum(len(w['new'])//2 for w in _runs):,} B) + {len(_img)-len(_st):,} B appended, "
+          f"reproduces the image; result sha256 {_pl['result_sha256']}")
 
 # ---- repack: the patched section 3 back into YOUR stock .syx ---------------
 subprocess.run([args.tool,"-i",args.stock,"-c","3",out,"-o",args.out],

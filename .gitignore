@@ -8,3 +8,4 @@ build/
 *.elf
 __pycache__/
 .DS_Store
+*.payload.json
