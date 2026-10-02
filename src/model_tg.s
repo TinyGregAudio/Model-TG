@@ -7959,7 +7959,10 @@ nms_out:
 | the selected track's sample name and the page redraws when it changes.
 | Keeps d2-d7.
 nm_tick:
-    tstl    mp_obj
+    tstl    %pc@(mp_obj)          | %pc@ spelled out: mp_obj is .globl, which
+                                  | binutils before 2.47 reach by an absolute
+                                  | address, 2.47 PC-relative - so the image
+                                  | would depend on the toolchain
     beqw    ntk_out
     lea.l   %sp@(-8),%sp
     moveml  %d2/%a2,%sp@
@@ -7969,7 +7972,7 @@ nm_tick:
     addql   #4,%sp
     movea.l %d0,%a1
     lea.l   %a1@(0x14),%a1        | nodes {next, prev, view, holder}
-    movel   mp_obj,%d1
+    movel   %pc@(mp_obj),%d1
     movea.l %a1@,%a0
 ntk_scan:
     cmpal   %a1,%a0
@@ -7987,7 +7990,7 @@ ntk_live:
     addql   #8,%sp
     bsr     nm_calc               | a1 = text, d0 = offset
     adda.l  %d0,%a1
-    lea.l   mach_nbuf,%a2         | the window: changed?
+    lea.l   %pc@(mach_nbuf),%a2   | the window: changed? (.globl: %pc@ spelled out)
     moveq   #NAME_W-1,%d2
     moveq   #0,%d1                | 1 once anything differs
 ntk_c:
@@ -8008,7 +8011,7 @@ ntk_same:
 ntk_end:
     tstl    %d1
     beqs    ntk_pop
-    movel   mp_obj,%sp@-          | redraw, with the new text
+    movel   %pc@(mp_obj),%sp@-    | redraw, with the new text
     jsr     0x40076082
     addql   #4,%sp
     bras    ntk_pop

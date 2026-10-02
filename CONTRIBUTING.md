@@ -61,7 +61,10 @@ replaces.
   `.w`, and use `jsr`/`jmp` beyond ±32 KB. The build checks that every 16-bit
   branch lands on a label. Start every `.inc` with a blank line: GNU as can
   misread an included file's first line.
-  `tools/gen_granular_tables.py` does this for its output.
+  `tools/gen_granular_tables.py` does this for its output. Read a `.globl` symbol
+  as `%pc@(sym)`, not plain `sym`: binutils before 2.47 assemble a plain one
+  as an absolute address and 2.47 as PC-relative, so the image (and its MAIN
+  OS sha256) would depend on the toolchain.
 - **Comment the why.** The existing comments record which stock routine a hook
   wraps and what was verified on hardware. Keep doing that: it is the only
   map anyone has.
