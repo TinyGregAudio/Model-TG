@@ -1,3 +1,4 @@
+
 | Q16.16 playback ratios: 2^((note-60)/12). note 60 == 1.0 (0x00010000)
 note_ratio:
     .long 0x00000800,0x0000087a,0x000008fb,0x00000983,0x00000a14,0x00000aae,0x00000b50,0x00000bfd

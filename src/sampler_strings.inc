@@ -1,3 +1,4 @@
+
 | Our parameter labels. These used to live at the tail of param_table.inc;
 | the table itself is gone (it is the stock one at 0x4010dce0, patched in
 | place by the build script), but the strings are ours and stay in the blob.

@@ -55,6 +55,27 @@ These were each verified on hardware; they save a lot of rediscovery.
   separate store: set `0x4001646a(track, step, slot, value)`, clear
   `0x400164b0`, get `0x4001591e`; slots come from the parameter table at
   `0x4010dce0` (56-byte entries, slot at +4).
+- **Step flag bit 12** (0x1000) is unused by the OS: nothing tests or sets it,
+  and it is saved, loaded and copied with the step. Slide trigs keep their
+  mark there. Whether a trig sounds a note: bit 7 when bit 11 is set, else the
+  track's `+710` bit 7 (clear: a trigless trig).
+- **Trig builder** `0x400548ce(track, pattern data, sounds, step, flag, out)`,
+  0 when no trig fires. Two callers: the sequencer, once a step a track
+  (`0x400551a6`), and `0x40055af4` (`0x40055bfa`), which builds a track's
+  current step and plays it at once - on a project load, after a stop, on an
+  edit, and so for the first step after Play, which builds nothing itself.
+  Audio-side pattern data: track t's 722 bytes at `+ t x 722` (as above);
+  length at `+713` and speed at `+715` when the pattern has a scale per track
+  (`+30667` = 1), else `+30662` and `+30668`; a speed is ticks a step from
+  `0x4010afa4` (24 a quarter). Locks at `+4332 + t x 4385 + step x 68 + 2 x
+  word` (-1 none). Sounds are 100 bytes at `sounds + 28 + t x 100` (a sound
+  lock's at `+694 + lock x 100`), parameter word k at `+20 + 2k`.
+- **Parameters in the audio thread:** targets at `0x800015a2 + 66t + 2k`, a
+  16.16 state at `0x800011e8`, and the smoothed words at `0x8000101a + 66t +
+  2k` that every machine reads each block (the voice loop's `a2`). The OS
+  smooths them each block (`0x40058474`); a trig's sound and locks jump the
+  state (`0x40058308`, `0x400583da`). Playing: `0x40a78874 | 0x40a7883c`
+  (`0x4005481a`), set as Play is pressed.
 - **Small files:** open `0x4007bc5e(path, "w"/"r", fh[16])`, read
   `0x4007baaa(buf, len, fh)`, write `0x4007bb0a(buf, len, fh)`, close
   `0x4007bc1c(fh)`. Task context only; write from a UI-task message (see
@@ -379,6 +400,23 @@ These were each verified on hardware; they save a lot of rediscovery.
   (Tone's pole, Vinyl's click rate/decay and hiss level adjusted to match)
 - Pages we draw ourselves (System, retrig, the Start/End waveform) account
   for the screen's y running from the bottom
+
+- Slide trigs: SETTINGS + a trig key toggles the step's bit 12 through the
+  stock flag setter (`sld_toggle`, which places a trig on an empty step); the
+  stock step reset `0x400169f0` clears it with the trig (`sld_reset`); the
+  step-light painter leaves a slide trig's light unset in the double-blink's
+  off moments (`sld_led`, repainted by `sld_tick`). Both builder calls go
+  through `sld_seq`: when a trig fires and the track's next trig (wrapping at
+  its length) is a slide trig, it arms a glide - every eligible word that
+  differs, from this step's value to the slide trig's (lock, or the step's
+  sound), over gap x ticks x 450,000 / tempo blocks. `sld_apply`, first in
+  `sampler_pre` so Attack and the stock Filter see it, starts it on the
+  voice's trig edge (or at once after a trigless trig), writes
+  `from + (to - from) x elapsed / length` over the smoothed words every block,
+  and stops on the next edge from half way on. An arm made by `0x40055af4`
+  has no age limit but waits for the OS's playing flag; the sequencer's arms
+  expire after their length, so one left over from a stop never fires.
+  State and buffers at `SLD_BASE`, below the manual-slice tables
 
 It also folds in three tweaks from
 [drumkilla/elektron-model-tweaks](https://github.com/drumkilla/elektron-model-tweaks)

@@ -30,6 +30,8 @@ keeps working.
   crush, rate, pump, filter, ring mod, noise riser, gate, tape stop, vinyl,
   flanger).
 - **Attack, Filter and Resonance** added to all the stock machines.
+- **Slide trigs:** a trig that glides every differing parameter, p-locks
+  included, from the trig before it, on any machine.
 - **Scale Lock**, **sample upload through Elektron Transfer**, a **System**
   page with CPU and memory use, and lower CPU use overall.
 

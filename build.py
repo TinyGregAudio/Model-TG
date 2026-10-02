@@ -474,6 +474,24 @@ print(f"  identity reply -> id_hook/id_hook2, name -> id_namebuf; config menu ->
 assert bytes(d[0x4007240c-BASE:0x4007240c-BASE+10])==bytes.fromhex("206f00042028000c4e75"), \
     bytes(d[0x4007240c-BASE:0x4007240c-BASE+10]).hex()
 jmp(0x4007240c, sym['key_hook'])
+# Slide trigs: a step's slide mark (bit 12) goes when the stock resets the step
+assert bytes(d[0x400169f0-BASE:0x400169f8-BASE])==bytes.fromhex("4feffff448d7040c"), \
+    "step reset 0x400169f0 moved"
+jmp(0x400169f0, sym['sld_reset'], b'\x4e\x71')
+# ...and the grid's step lights: a slide trig double-blinks (sld_led)
+_o=0x40021f56-BASE
+assert bytes(d[_o:_o+22])==bytes.fromhex("2f034e944879404a8cb82f0d2f002f024e964fef0014"), \
+    "step-light painter 0x40021f56 moved"
+d[_o:_o+22]=b'\x4e\xb9'+struct.pack('>I',sym['sld_led'])+b'\x4e\x71'*8
+print("  0x40021f56 -> jsr sld_led (step lights)")
+# ...and the slide itself: both calls of the trig builder - the sequencer's per
+# step, and 0x40055af4's (the first step on Play, edits while playing) - go
+# through sld_seq, which pops the arguments as the replaced lea did
+for _a,_old in ((0x400551a6,"4ebaf7264fef0018"),(0x40055bfa,"4ebaecd24fef0018")):
+    _o=_a-BASE
+    assert bytes(d[_o:_o+8])==bytes.fromhex(_old), f"trig-builder call 0x{_a:08x} moved"
+    d[_o:_o+8]=b'\x4e\xb9'+struct.pack('>I',sym['sld_seq'])+b'\x4e\x71'
+    print(f"  0x{_a:08x} -> jsr sld_seq (slide trigs)")
 # Per-machine descriptor lookup -> our own descriptor for machine 6.
 # PHASE1 already rewrote 0x4004df76 to `jmp table_lookup_b_fixed`; point that
 # jmp at descr_b_hook instead, which answers machine 6 and otherwise falls
@@ -716,7 +734,7 @@ nres=(end-CACHE_BASE+CACHE_BLK-1)//CACHE_BLK     # blocks the blob occupies
 # 5 since samplerID (the retrig page's master FX); samplerHN-IC fit in 4.
 # 11 of 16 blocks stay the
 # filesystem's; our own sample loading reads the eMMC directly, not through it.
-assert 1<=nres<=5, f"blob spans {nres} cache blocks - too much of the cache"
+assert 1<=nres<=6, f"blob spans {nres} cache blocks - too much of the cache"
 # head = first entry we do NOT occupy; the prev-link loop starts one past it
 for addr,old,newv,what in ((0x400792f2, 0x401eb750, CACHE_ENTRY+20*nres,      'LRU head'),
                            (0x400792bc, 0x401eb774, CACHE_ENTRY+20*(nres+1)+16,'prev-link loop start')):

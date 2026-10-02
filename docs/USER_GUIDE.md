@@ -22,6 +22,7 @@ The twelve parameter knobs are numbered 1 to 12.
 - [Stereo](#stereo)
 - [Retrig and master FX](#retrig-and-master-fx)
 - [Additions for every machine](#additions-for-every-machine)
+- [Slide trigs](#slide-trigs)
 - [Scale Lock](#scale-lock)
 - [Uploading samples with Elektron Transfer](#uploading-samples-with-elektron-transfer)
 - [The System page](#the-system-page)
@@ -248,6 +249,31 @@ The master FX stay on after you close the page, and through pattern changes.
   machines are cheaper, and delay and reverb switch off while nothing is
   sounding.
 
+## Slide trigs
+
+A slide trig glides into its values instead of jumping to them. Every
+parameter that differs between the trig before it and the slide trig moves
+smoothly from one to the other over the whole gap, and arrives as the slide
+trig plays. A value is the step's p-lock, or the sound's own where the step
+has none.
+
+- Hold **SETTINGS** and press a trig key to make that step a slide trig, or to
+  turn its slide off again (*Slide on* / *Slide off*). On an empty step it
+  places a trig, already a slide trig.
+- Slide trigs **double-blink** on the step keys.
+- It works on every machine, and the trig before can be trigless: a trigless
+  trig with locks followed by a slide trig glides between the two.
+- What glides: the machine's parameters (Pitch, Color, Shape, Sweep, Contour
+  and the rest), fine tune, Amp Decay, Volume, the delay and reverb sends,
+  Pan, LFO speed, fade, start phase and depth, and Model-TG's Attack, Filter
+  and Resonance. Switches and choices jump as usual: the machine, Gate, and
+  the LFO's multiplier, destination, waveform and trig mode.
+- The slide's speed follows the tempo and the track's speed. Across swung
+  steps it can arrive a little early or late; it then holds until the slide
+  trig plays.
+- The mark is saved with the pattern and copied with its step. A step whose
+  trig is removed loses it.
+
 ## Scale Lock
 
 Two items in the **Scale menu** (**FUNC** + **PAGE**): **Scl** (the scale)
@@ -301,6 +327,7 @@ are included (build with `--no-tweaks` to leave them out):
 | anywhere | **SETTINGS** + **RETRIG** | retrig page and master FX |
 | anywhere | **SETTINGS** + return | master FX off |
 | anywhere | **PRESET** + Decay / Sweep / Contour | Attack / Filter / Resonance |
+| grid | **SETTINGS** + trig key | slide trig on / off |
 | browser | pick a sample file | load it onto the Sampler track |
 | step held | **PRESET**, pick a sample | sample lock |
 | slice editor | **PUNCH** | arm or stop tap slicing |

@@ -1,3 +1,4 @@
+
 | entry offset, our name/cat/short, then stock ones to restore
 | Rotated with the descriptor so page order matches slot order:
 |   0x2e Kick Color   slot 0x10 -> Sample Start

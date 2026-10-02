@@ -44,7 +44,7 @@ replaces.
 - **Assert before you patch.** Every write into the stock area in `build.py`
   checks the exact stock bytes first.
 - **Nothing of ours below `0x401ab750`.** Our code lives in one blob in
-  filesystem cache blocks; the build reserves as few as it needs (currently 5
+  filesystem cache blocks; the build reserves as few as it needs (currently 6
   of 16). If a feature needs another block, raise the limit in `build.py` and
   say so in the PR.
 - **Replay what you overwrite.** A hook that replaces stock instructions runs
@@ -58,7 +58,9 @@ replaces.
   register; there is no `mulsl` with an immediate or absolute operand; `moveml`
   has no predecrement mode; byte branches fail when a function grows, so use
   `.w`, and use `jsr`/`jmp` beyond ±32 KB. The build checks that every 16-bit
-  branch lands on a label.
+  branch lands on a label. Start every `.inc` with a blank line: GNU as can
+  misread an included file's first line.
+  `tools/gen_granular_tables.py` does this for its output.
 - **Comment the why.** The existing comments record which stock routine a hook
   wraps and what was verified on hardware. Keep doing that: it is the only
   map anyone has.
