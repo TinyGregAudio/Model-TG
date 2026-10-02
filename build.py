@@ -236,14 +236,6 @@ if args.assemble_only:
             _d=[_k for _k in range(min(len(_pub),len(blob))) if _pub[_k]!=blob[_k]]
             print(f"::error::{args.check_flasher}: code differs from this source in {len(_d)} bytes "
                   f"(sizes {len(_pub)}/{len(blob)}), assembler: {_ver}")
-            _seen=set()
-            for _k in _d:
-                _a=BLOB+_k; _n=max((_x for _x in _syms if _x[0]<=_a), default=(BLOB,"?"))
-                if _n in _seen: continue
-                _seen.add(_n)
-                print(f"::error::0x{_a:08x} {_n[1]}+{_a-_n[0]}: published {_pub[_k-4:_k+8].hex()} "
-                      f"assembled {blob[_k-4:_k+8].hex()}")
-                if len(_seen)>=12: break
             # the first difference that is not a shifted absolute address: where
             # the code itself is encoded differently
             _k=0; _real=[]
@@ -260,6 +252,14 @@ if args.assemble_only:
                 _a=BLOB+_k; _n=max((_x for _x in _syms if _x[0]<=_a), default=(BLOB,"?"))
                 print(f"::error::first real difference 0x{_a:08x} {_n[1]}+{_a-_n[0]}: "
                       f"published {_pub[_k-8:_k+24].hex()} assembled {blob[_k-8:_k+24].hex()}")
+            _seen=set()
+            for _k in _d:
+                _a=BLOB+_k; _n=max((_x for _x in _syms if _x[0]<=_a), default=(BLOB,"?"))
+                if _n in _seen: continue
+                _seen.add(_n)
+                print(f"::error::0x{_a:08x} {_n[1]}+{_a-_n[0]}: published {_pub[_k-4:_k+8].hex()} "
+                      f"assembled {blob[_k-4:_k+8].hex()}")
+                if len(_seen)>=3: break
             raise SystemExit(f"{args.check_flasher} ({_fl['version']}) is not this source as assembled "
                              "here: regenerate it with build.py --stock ... --flasher")
         assert _tail[:_o]==bytes(_o) and _tail[_o+len(blob):]==bytes(len(_tail)-_o-len(blob)), \
