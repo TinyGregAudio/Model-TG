@@ -220,10 +220,11 @@ if args.assemble_only:
         _fl=_cjson.load(open(args.check_flasher))
         _tail=_cb64.b64decode(_fl["append"]["base64"])
         _o=BLOB-STOCK_END
+        print(f"::notice::{args.check_flasher} ({_fl['version']}): appended {len(_tail)} B, code "
+              f"{len(_tail)-_o} B incl. padding; assembled here {len(blob)} B with "
+              + subprocess.run([CROSS+"as","--version"],capture_output=True,text=True).stdout.splitlines()[0])
         assert _fl["append"]["off"]==STOCK_END-BASE, "flasher patch appends at the wrong place"
         assert _fl["stock_sha256"]==STOCK_SHA256, "flasher patch is for another stock OS"
-        assert _tail[:_o]==bytes(_o) and _tail[_o+len(blob):]==bytes(len(_tail)-_o-len(blob)), \
-            "flasher patch: the bytes around the code are not zeros"
         _pub=_tail[_o:_o+len(blob)]
         if _pub!=blob:
             # say where, so a toolchain difference can be found from CI's
@@ -245,6 +246,8 @@ if args.assemble_only:
                 if len(_seen)>=12: break
             raise SystemExit(f"{args.check_flasher} ({_fl['version']}) is not this source as assembled "
                              "here: regenerate it with build.py --stock ... --flasher")
+        assert _tail[:_o]==bytes(_o) and _tail[_o+len(blob):]==bytes(len(_tail)-_o-len(blob)), \
+            "flasher patch: the bytes around the code are not zeros"
         assert not _fl["version"].endswith("-dirty"), \
             f"{args.check_flasher} was made from uncommitted changes ({_fl['version']})"
         print(f"  {args.check_flasher} ({_fl['version']}): its code is this source's")
