@@ -242,10 +242,16 @@ if args.assemble_only:
             while _k<min(len(_pub),len(blob)) and len(_real)<3:
                 if _pub[_k]==blob[_k]: _k+=1; continue
                 _ok=False
-                for _s in range(max(0,_k-3),_k+1):
+                for _s in range(max(0,_k-3),_k+1):    # a moved absolute address
                     _pa=int.from_bytes(_pub[_s:_s+4],'big'); _aa=int.from_bytes(blob[_s:_s+4],'big')
                     if BLOB<=_pa<BLOB+len(_pub) and 0<_aa-_pa<=64:
                         _ok=True; _k=_s+4; break
+                if not _ok:                             # a moved PC-relative target
+                    for _s in range(max(0,_k-1),_k+1):
+                        _pd=int.from_bytes(_pub[_s:_s+2],'big',signed=True)
+                        _ad=int.from_bytes(blob[_s:_s+2],'big',signed=True)
+                        if 0<abs(_ad-_pd)<=64 and _s%2==0:
+                            _ok=True; _k=_s+2; break
                 if _ok: continue
                 _real.append(_k); _k+=16
             for _k in _real:
