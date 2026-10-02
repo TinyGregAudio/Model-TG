@@ -38,11 +38,20 @@ _ap.add_argument("--modded-cycles", metavar="FILE",
                  help="also write Model-TG as a tweak file for the Modded-Cycles web "
                       "flasher (docs/PAYLOAD.md); it contains stock bytes, so it is "
                       "never committed or attached to a release")
+_ap.add_argument("--flasher", metavar="FILE",
+                 help="also write the patch file the Model-TG web flasher applies "
+                      "(flasher/model-tg.json); it holds only Model-TG's own bytes "
+                      "and is checked for runs of stock bytes (docs/FLASHER.md)")
+_ap.add_argument("--check-flasher", metavar="FILE",
+                 help="with --assemble-only: check that FILE's appended code is exactly "
+                      "what src/ assembles to, and that it was made from committed source")
 _ap.add_argument("--assemble-only", action="store_true",
                  help="assemble, link and self-check src/ only - no stock firmware needed")
 args=_ap.parse_args()
 if not args.assemble_only and not args.stock:
     _ap.error("--stock is required (or --assemble-only)")
+if args.modded_cycles and os.path.abspath(args.modded_cycles).startswith(os.path.join(REPO,"flasher")+os.sep):
+    _ap.error("--modded-cycles output holds stock bytes: never write it into flasher/ (it is published)")
 if args.no_tweaks:
     os.environ["NO_TWEAKS"]="1"
 src="model_tg.s"
@@ -203,6 +212,23 @@ if len(blob) % 16:
     blob += b'\x00' * (16 - len(blob) % 16)
 if args.assemble_only:
     print(f"  assembled, linked and self-checked: {len(blob):,} B blob (no image built)")
+    if args.check_flasher:
+        # what the web flasher publishes appends zeros up to BLOB, then the blob,
+        # then zeros: so CI can prove, with no stock firmware, that the code
+        # served is the code in this tree
+        import json as _cjson, base64 as _cb64
+        _fl=_cjson.load(open(args.check_flasher))
+        _tail=_cb64.b64decode(_fl["append"]["base64"])
+        _o=BLOB-STOCK_END
+        assert _fl["append"]["off"]==STOCK_END-BASE, "flasher patch appends at the wrong place"
+        assert _fl["stock_sha256"]==STOCK_SHA256, "flasher patch is for another stock OS"
+        assert _tail[:_o]==bytes(_o) and _tail[_o+len(blob):]==bytes(len(_tail)-_o-len(blob)), \
+            "flasher patch: the bytes around the code are not zeros"
+        assert _tail[_o:_o+len(blob)]==blob, (f"{args.check_flasher} ({_fl['version']}) is not "
+            "this source: regenerate it with build.py --stock ... --flasher")
+        assert not _fl["version"].endswith("-dirty"), \
+            f"{args.check_flasher} was made from uncommitted changes ({_fl['version']})"
+        print(f"  {args.check_flasher} ({_fl['version']}): its code is this source's")
     sys.exit(0)
 _stock=bytearray(open(STOCK_BIN,'rb').read())
 if hashlib.sha256(_stock).hexdigest()!=STOCK_SHA256:
@@ -809,6 +835,72 @@ if args.modded_cycles:
         _pjson.dump(_tw,_f,indent=1); _f.write("\n")
     print(f"  Modded-Cycles tweak {args.modded_cycles}: {len(_writes)} writes, "
           f"{len(_tail):,} B appended at {_at}; reproduces the image")
+
+# ---- the web flasher's patch file (flasher/, docs/FLASHER.md) ---------------
+# What the flasher applies to the user's own stock section 3: the changed runs
+# (new bytes only - no "old"), and everything after the stock section, with
+# the hashes that pin both ends. It is published, so it must hold no Elektron
+# bytes: every run is searched for in the stock section, and a run of 128 or
+# more stock bytes that is not a plain fill (at most two distinct 32-bit
+# words: zeros, 0xff, masks) fails the build. What does match today is three
+# small display routines cloned from stock on purpose (value_invoker,
+# value_invoker2, gm_val; at most 93 bytes) - already public as source.
+FLASHER_MAX_RUN=128
+def _stock_runs(st, runs, w=8):
+    idx=set(st[k:k+w] for k in range(len(st)-w+1))
+    found=[]
+    for off,data in runs:
+        k=0
+        while k+w<=len(data):
+            if data[k:k+w] in idx:
+                e=k+w
+                while e<len(data) and data[k:e+1] in st: e+=1
+                found.append((e-k,off+k,data[k:e])); k=e
+            else: k+=1
+    return found
+def _is_fill(b):
+    return len(set(b[i:i+4] for i in range(0,len(b)-3,4)))<=2
+if args.flasher:
+    import json as _fjson, base64 as _b64
+    _st=bytes(_stock); _img=bytes(d)
+    _runs=[]; _i=0
+    while _i<len(_st):
+        if _img[_i]!=_st[_i]:
+            _j=_i
+            while _j<len(_st) and _img[_j]!=_st[_j]: _j+=1
+            _runs.append((_i,_img[_i:_j])); _i=_j
+        else: _i+=1
+    _tail=_img[len(_st):]
+    _found=[f for f in _stock_runs(_st, _runs+[(len(_st),_tail)]) if not _is_fill(f[2])]
+    _found.sort(reverse=True)
+    _long=_found[0] if _found else (0,0,b"")
+    assert _long[0]<FLASHER_MAX_RUN, (f"flasher patch holds {_long[0]} stock bytes in a row "
+        f"at 0x{BASE+_long[1]:08x} - it must not carry Elektron firmware")
+    try:
+        _fver=subprocess.run(["git","describe","--tags","--always","--dirty"],cwd=REPO,
+                             capture_output=True,text=True,check=True).stdout.strip()
+    except Exception:
+        _fver="unknown"
+    _fl={"format":1,"name":"Model-TG","version":_fver,
+         "source":"https://github.com/TinyGregAudio/Model-TG",
+         "license":"MIT (c) TinyGregAudio; tweaks MIT (c) drumkilla",
+         "device":"Model:Cycles","device_id":0x11,"os":"1.13","section":3,
+         "stock_sha256":STOCK_SHA256,"stock_len":len(_st),
+         "result_sha256":RESULT_SHA256,"result_len":len(_img),
+         "writes":[{"off":o,"hex":b.hex()} for o,b in _runs],
+         "append":{"off":len(_st),"base64":_b64.b64encode(_tail).decode()}}
+    _chk=bytearray(_st)+bytearray(len(_tail))          # replayed as the flasher does
+    for _w in _fl["writes"]:
+        _b=bytes.fromhex(_w["hex"]); _chk[_w["off"]:_w["off"]+len(_b)]=_b
+    _chk[len(_st):]=_b64.b64decode(_fl["append"]["base64"])
+    assert hashlib.sha256(bytes(_chk)).hexdigest()==RESULT_SHA256, "the flasher patch does not reproduce the image"
+    os.makedirs(os.path.dirname(os.path.abspath(args.flasher)),exist_ok=True)
+    with open(args.flasher,'w') as _f:
+        _fjson.dump(_fl,_f,indent=1); _f.write("\n")
+    print(f"  flasher patch {args.flasher} ({_fver}): {len(_runs)} writes, {len(_tail):,} B "
+          f"appended; longest stock run {_long[0]} B; reproduces the image")
+    if _fver.endswith("-dirty"):
+        print("  NOTE: built from uncommitted changes - not for publishing")
 
 # ---- repack: the patched section 3 back into YOUR stock .syx ---------------
 subprocess.run([args.tool,"-i",args.stock,"-c","3",out,"-o",args.out],

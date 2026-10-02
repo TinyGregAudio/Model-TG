@@ -10,3 +10,6 @@ __pycache__/
 .DS_Store
 *.payload.json
 model-tg*.json
+# ...except the web flasher's patch, which holds only Model-TG's own bytes
+# (build.py --flasher checks it; docs/FLASHER.md)
+!flasher/model-tg.json

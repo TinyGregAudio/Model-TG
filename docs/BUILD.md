@@ -41,6 +41,7 @@ Options:
 | `--out FILE` | where to write the firmware (default `Model-TG.syx`) |
 | `--tool PATH` | the `elektron-firmware-tool` to use |
 | `--no-tweaks` | leave out the third-party tweaks in `tweaks/` |
+| `--flasher FILE` | also write the web flasher's patch file ([FLASHER.md](FLASHER.md)) |
 | `--modded-cycles FILE` | also write Model-TG as a tweak for the Modded-Cycles web flasher ([PAYLOAD.md](PAYLOAD.md)) |
 | `--assemble-only` | assemble, link and self-check `src/` without any stock firmware (what CI runs) |
 
@@ -59,11 +60,14 @@ branch targets, the blob's placement and size, and more (see
 
 ## Without a toolchain
 
-Model-TG may be offered by the third-party
-[Modded-Cycles](https://github.com/18nelli18/Modded-Cycles) web flasher, which
-builds it in the browser from your own stock OS. It is separate from this
-project; a build from it matches a release when its MAIN OS hash is the one in
-that release's notes. See [PAYLOAD.md](PAYLOAD.md).
+Use the **[web flasher](https://tinygregaudio.github.io/Model-TG/)**. It does
+what `build.py` does, in your browser, from your own stock OS, and makes the
+identical file. Your OS file is never uploaded. See [FLASHER.md](FLASHER.md).
+
+Model-TG may also be offered by the third-party
+[Modded-Cycles](https://github.com/18nelli18/Modded-Cycles) web flasher. It is
+separate from this project; a build from it matches a release when its MAIN OS
+hash is the one in that release's notes. See [PAYLOAD.md](PAYLOAD.md).
 
 ## Install
 

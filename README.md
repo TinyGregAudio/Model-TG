@@ -39,6 +39,13 @@ The full, button-by-button guide is in **[docs/USER_GUIDE.md](docs/USER_GUIDE.md
 
 ## Getting it
 
+The easiest way is the **[web flasher](https://tinygregaudio.github.io/Model-TG/)**:
+pick your stock OS 1.13 file and it builds Model-TG right there in your
+browser. Your file never leaves your computer. Install the result like an
+official OS update.
+
+Or build it yourself:
+
 ```sh
 git clone https://github.com/TinyGregAudio/Model-TG
 cd Model-TG
@@ -48,7 +55,6 @@ python3 build.py --stock path/to/model-cycles_OS1.13.syx
 Then install `Model-TG.syx` like an official OS update. The tools you need,
 and how to go back to stock, are in **[docs/BUILD.md](docs/BUILD.md)**.
 
-No toolchain? See [Without a toolchain](docs/BUILD.md#without-a-toolchain).
 
 ## Contributing
 

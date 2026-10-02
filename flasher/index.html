@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model-TG Flasher</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<meta name="description" content="Build Model-TG for the Elektron Model:Cycles from your own stock OS, in your browser.">
+<style>
+  :root {
+    --bg: #f7f7f5; --fg: #1c1c1a; --muted: #62625d; --card: #ffffff; --line: #deded8;
+    --accent: #2f6f4f; --accent-fg: #ffffff; --warn-bg: #fff6e0; --warn-line: #e8c56a;
+    --err: #a3281f; --bar: #e6e6e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --fg: #ececea; --muted: #a2a29c; --card: #1f1f1e; --line: #33332f;
+      --accent: #5fb38a; --accent-fg: #0f1a14; --warn-bg: #2b2412; --warn-line: #7a6326;
+      --err: #ff8a80; --bar: #33332f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; align-items: center; gap: 18px; margin: 0 0 24px; }
+  header img { width: 96px; height: 96px; flex: none; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px; margin: 0 0 16px;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  .card p { margin: 0 0 10px; }
+  .card p:last-child { margin-bottom: 0; }
+  .warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  ol { margin: 0; padding-left: 1.3em; }
+  li { margin: 0 0 6px; }
+  a { color: var(--accent); }
+  code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .drop {
+    display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 22px 16px;
+    text-align: center; cursor: pointer; color: var(--muted);
+  }
+  .drop.over, .drop:focus-within { border-color: var(--accent); color: var(--fg); }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .drop strong { color: var(--fg); }
+  .bar { height: 8px; background: var(--bar); border-radius: 4px; overflow: hidden; margin: 12px 0 6px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  #status { min-height: 1.5em; color: var(--muted); }
+  #status.err { color: var(--err); }
+  .btn {
+    display: inline-block; background: var(--accent); color: var(--accent-fg); border: 0;
+    border-radius: 8px; padding: 10px 18px; font: inherit; font-weight: 600;
+    text-decoration: none; cursor: pointer;
+  }
+  .hidden { display: none; }
+  footer { color: var(--muted); font-size: 0.85rem; margin-top: 28px; }
+  footer p { margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="badge.png" alt="">
+    <div>
+      <h1>Model-TG Flasher</h1>
+      <p class="sub" id="ver">Loading…</p>
+    </div>
+  </header>
+
+  <div class="card warn">
+    <h2>Unofficial firmware</h2>
+    <p>Model-TG is not made, supported or endorsed by Elektron. You install it at your
+      own risk. <strong>Back up your projects and samples first.</strong> To go back,
+      install the stock OS the same way.</p>
+  </div>
+
+  <div class="card">
+    <h2>1. Get the stock OS</h2>
+    <p>Download <strong>Model:Cycles OS 1.13</strong> (<code>model-cycles_OS1.13.syx</code>)
+      from the Model:Cycles support page on <a href="https://www.elektron.se/" rel="noopener">elektron.se</a>.
+      It must be the unmodified file.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Build Model-TG from it</h2>
+    <p>Your file never leaves your computer: this page patches it right here in your browser.</p>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".syx">
+      <strong>Choose the OS file</strong> or drop it here
+    </label>
+    <div class="bar hidden" id="bar"><div id="fill"></div></div>
+    <p id="status" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="card hidden" id="result">
+    <h2>3. Install it</h2>
+    <p><a class="btn" id="save" download>Save Model-TG.syx</a></p>
+    <ol>
+      <li>Connect the Cycles over USB and open <strong>Elektron Transfer</strong>.</li>
+      <li>Check that <strong>Device Config &gt; Transfer</strong> is set to <strong>CYC</strong>
+        (every power-on starts there). Never install an OS while it is set to SMP.</li>
+      <li>Send the file to the Cycles with Transfer, as you would an official OS update.</li>
+    </ol>
+    <p>Its MAIN OS sha256 matches this release: <code id="hash"></code></p>
+  </div>
+
+  <footer>
+    <p>The <a href="https://github.com/TinyGregAudio/Model-TG/blob/main/docs/USER_GUIDE.md">user guide</a>
+      covers everything Model-TG adds. Source and license:
+      <a href="https://github.com/TinyGregAudio/Model-TG">github.com/TinyGregAudio/Model-TG</a> (MIT).</p>
+    <p>Opens and repacks the OS with a port of
+      <a href="https://github.com/mischa85/elektron-firmware-tool">elektron-firmware-tool</a> (MIT).
+      Includes tweaks from <a href="https://github.com/drumkilla/elektron-model-tweaks">elektron-model-tweaks</a> (MIT).
+      "Elektron" and "Model:Cycles" are trademarks of Elektron Music Machines, used only to say
+      what this works with.</p>
+  </footer>
+</main>
+
+<script src="elektron.js"></script>
+<script src="patch.js"></script>
+<script>
+(function () {
+  'use strict';
+  var patch = null, busy = false, url = null;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function status(text, isErr) {
+    $('status').textContent = text;
+    $('status').className = isErr ? 'err' : '';
+  }
+  function progress(f, label) {
+    $('bar').classList.remove('hidden');
+    $('fill').style.width = Math.round(f * 100) + '%';
+    status(label + '…');
+  }
+
+  fetch('model-tg.json', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (p) {
+      patch = p;
+      $('ver').textContent = 'Model-TG ' + p.version + ' for ' + p.device + ' OS ' + p.os;
+    })
+    .catch(function () {
+      $('ver').textContent = 'Could not load the release patch. Reload the page to try again.';
+    });
+
+  function done(bytes) {
+    busy = false;
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+    var name = 'Model-TG-' + patch.version + '.syx';
+    $('save').href = url; $('save').download = name;
+    $('save').textContent = 'Save ' + name;
+    $('hash').textContent = patch.result_sha256;
+    $('result').classList.remove('hidden');
+    status('Built and checked. Save it, then install it with Transfer.');
+  }
+  function fail(msg) {
+    busy = false;
+    $('bar').classList.add('hidden');
+    status(msg, true);
+  }
+
+  function run(file) {
+    if (busy) return;
+    if (!patch) { fail('The release patch has not loaded yet.'); return; }
+    busy = true;
+    $('result').classList.add('hidden');
+    progress(0, 'Reading ' + file.name);
+    file.arrayBuffer().then(function (buf) {
+      var worker = null;
+      try { worker = new Worker('worker.js'); } catch (e) { worker = null; }
+      if (worker) {
+        worker.onmessage = function (e) {
+          var m = e.data;
+          if (m.progress !== undefined) progress(m.progress, m.label);
+          else if (m.done) { worker.terminate(); done(new Uint8Array(m.done)); }
+          else { worker.terminate(); fail(m.error); }
+        };
+        worker.onerror = function () { worker.terminate(); fail('The flasher stopped unexpectedly.'); };
+        worker.postMessage({ syx: buf, patch: patch }, [buf]);
+      } else {
+        setTimeout(function () {              // no workers (e.g. opened from disk)
+          try { done(window.ModelTG.flash(new Uint8Array(buf), patch, progress)); }
+          catch (err) { fail(err.message || String(err)); }
+        }, 50);
+      }
+    }, function () { fail('Could not read that file.'); });
+  }
+
+  $('file').addEventListener('change', function () {
+    if (this.files[0]) run(this.files[0]);
+    this.value = '';
+  });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (t) {
+    drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (t) {
+    drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    if (e.dataTransfer.files[0]) run(e.dataTransfer.files[0]);
+  });
+})();
+</script>
+</body>
+</html>
