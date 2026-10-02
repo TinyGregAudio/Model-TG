@@ -224,8 +224,27 @@ if args.assemble_only:
         assert _fl["stock_sha256"]==STOCK_SHA256, "flasher patch is for another stock OS"
         assert _tail[:_o]==bytes(_o) and _tail[_o+len(blob):]==bytes(len(_tail)-_o-len(blob)), \
             "flasher patch: the bytes around the code are not zeros"
-        assert _tail[_o:_o+len(blob)]==blob, (f"{args.check_flasher} ({_fl['version']}) is not "
-            "this source: regenerate it with build.py --stock ... --flasher")
+        _pub=_tail[_o:_o+len(blob)]
+        if _pub!=blob:
+            # say where, so a toolchain difference can be found from CI's
+            # annotations: address, nearest symbol, published / assembled bytes
+            _syms=sorted((int(_l.split()[0],16),_l.split()[2]) for _l in
+                         subprocess.run([CROSS+"nm",elf],capture_output=True,text=True).stdout.splitlines()
+                         if len(_l.split())==3)
+            _ver=subprocess.run([CROSS+"as","--version"],capture_output=True,text=True).stdout.splitlines()[0]
+            _d=[_k for _k in range(min(len(_pub),len(blob))) if _pub[_k]!=blob[_k]]
+            print(f"::error::{args.check_flasher}: code differs from this source in {len(_d)} bytes "
+                  f"(sizes {len(_pub)}/{len(blob)}), assembler: {_ver}")
+            _seen=set()
+            for _k in _d:
+                _a=BLOB+_k; _n=max((_x for _x in _syms if _x[0]<=_a), default=(BLOB,"?"))
+                if _n in _seen: continue
+                _seen.add(_n)
+                print(f"::error::0x{_a:08x} {_n[1]}+{_a-_n[0]}: published {_pub[_k-4:_k+8].hex()} "
+                      f"assembled {blob[_k-4:_k+8].hex()}")
+                if len(_seen)>=12: break
+            raise SystemExit(f"{args.check_flasher} ({_fl['version']}) is not this source as assembled "
+                             "here: regenerate it with build.py --stock ... --flasher")
         assert not _fl["version"].endswith("-dirty"), \
             f"{args.check_flasher} was made from uncommitted changes ({_fl['version']})"
         print(f"  {args.check_flasher} ({_fl['version']}): its code is this source's")
