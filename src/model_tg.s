@@ -273,9 +273,26 @@ pitch_thr:
     .long 94099, 99694, 105622, 111903, 118557, 125607
     .long 133076, 140989, 149373, 158255, 167665, 177635
 
+| The pitch value of each note, 45710 x 2^(k/12): notes 36..83 (k = -24..23),
+| the centres of the intervals pitch_thr bisects. The slice's step divides the
+| note out by it, leaving the Pitch knob.
+pitch_ctr:
+    .long 11428, 12107, 12827, 13590, 14398, 15254
+    .long 16161, 17122, 18140, 19219, 20361, 21572
+    .long 22855, 24214, 25654, 27179, 28795, 30508
+    .long 32322, 34244, 36280, 38437, 40723, 43144
+    .long 45710, 48428, 51308, 54359, 57591, 61016
+    .long 64644, 68488, 72560, 76875, 81446, 86289
+    .long 91420, 96856, 102615, 108717, 115182, 122031
+    .long 129287, 136975, 145120, 153750, 162892, 172578
+
 slice_pending:                    | a trigger the render has yet to serve
     .byte 0,0,0,0,0,0,0,0
-live_note:                        | last note played, per track; 52 = pad 1
+live_note:                        | last note to start, per track; 52 = pad 1.
+                                  | Written by note_on_hook (pads, keyboard)
+                                  | and sld_seq (the sequencer's trigs)
+    .byte 52,52,52,52,52,52,52,52
+slice_note:                       | the note the slice now playing was chosen from
     .byte 52,52,52,52,52,52,52,52
 
 | ============ patch 1: pre-gate routing + trigger edge ============
@@ -1468,8 +1485,25 @@ sv_lv:
     movel   %a0@(0,%d0:l:4),%d5
     lsrl    #4,%d5                | slice length
     beqw    sv_noslice            | fewer than 16 samples: nothing to slice
-    movea.l %d2,%a1
-    bsr     slice_from_pitch      | -> d1 = note - 52
+    | The slice comes from the note alone, never from voice+232, which also
+    | carries the Pitch knob. live_note holds the last note to start - from
+    | note_on_hook (pads, keyboard, MIDI) or sld_seq (the sequencer's trigs) -
+    | and is latched here at the trigger edge, so a note that arrives a tick
+    | ahead of the audio cannot cut the slice still sounding. The knob
+    | transposes the slice instead (see sv_slstep).
+    lea.l   slice_pending,%a0
+    tstb    %a0@(0,%d4:l)
+    beqs    sv_sn_have
+    lea.l   live_note,%a0
+    moveq   #0,%d0
+    moveb   %a0@(0,%d4:l),%d0
+    lea.l   slice_note,%a0
+    moveb   %d0,%a0@(0,%d4:l)
+sv_sn_have:
+    lea.l   slice_note,%a0
+    moveq   #0,%d1
+    moveb   %a0@(0,%d4:l),%d1
+    subil   #52,%d1               | note - 52: trig pad 1 is slice 0
     tstl    sle_run               | the slice editor tapping this track: the
     beqs    sv_sl_nt              | whole sample, from its start
     cmpl    sle_trk,%d4
@@ -1614,8 +1648,8 @@ sv_noslice:
     lea.l   loop_mode,%a0
     movel   %a0@(0,%d4:l:4),%d0
     cmpil   #2,%d0
-    beqs    sv_defstep            | slice mode: the note chooses the slice, so
-                                  | it must not transpose as well
+    beqw    sv_slstep             | slice mode: the note chooses the slice, so
+                                  | only the Pitch knob transposes it
     movea.l %d2,%a0               | d2 = voice
     movel   %a0@(232),%d1
     beqs    sv_defstep            | not set -> play at 1.0
@@ -1626,6 +1660,38 @@ sv_noslice:
     lsrl    #4,%d1                | (v>>4)*93957>>12 -> Q16.16
     tstl    %d1
     bnes    sv_havestep
+    braw    sv_defstep
+    | Slice: voice+232 is the played note plus the Pitch knob. Dividing it by
+    | that note's own pitch value (pitch_ctr, indexed by slice_note) leaves the
+    | knob: a step of 1.0 at knob 0, 2.0 an octave up - pitch and duration move
+    | together, as a varispeed does. A Q14 ratio, so v << 14 must stay under
+    | 2^32: v is capped at 0x3ffff, about +24 semitones from note 60.
+sv_slstep:
+    movea.l %d2,%a0               | d2 = voice
+    movel   %a0@(232),%d1
+    beqw    sv_defstep
+    lea.l   slice_note,%a0
+    moveq   #0,%d0
+    moveb   %a0@(0,%d4:l),%d0
+    subil   #36,%d0               | pitch_ctr starts at note 36
+    bpls    sv_sn_lo
+    moveq   #0,%d0
+sv_sn_lo:
+    cmpil   #47,%d0
+    bles    sv_sn_hi
+    moveq   #47,%d0
+sv_sn_hi:
+    lea.l   pitch_ctr,%a0
+    movel   %a0@(0,%d0:l:4),%d0   | that note's own pitch value
+    cmpil   #0x3ffff,%d1
+    bles    sv_sn_ok
+    movel   #0x3ffff,%d1
+sv_sn_ok:
+    lsll    #8,%d1
+    lsll    #6,%d1                | v << 14
+    divul   %d0,%d1               | Q14: pitch value / the note's own
+    lsll    #2,%d1                | Q16.16 step
+    bnew    sv_havestep
 sv_defstep:
     movel   #0x10000,%d1
 sv_havestep:
@@ -5054,6 +5120,18 @@ sq_go:
     movel   #722,%d5
     mulsl   %d2,%d5
     lea.l   %a3@(0,%d5:l),%a1     | the track s step data
+    | The note this trig plays, for a Slice track to index by: its Trig Note
+    | byte, else the track's (-1; +712), as the builder reads it. The sequencer
+    | starts its notes here, not through note_on_hook, so without this
+    | live_note stays at the last pad pressed. a0, a4 and d0-d4 are live; a5
+    | is not assigned until sq_spd.
+    lea.l   %a1@(580),%a5
+    mvsb    %a5@(0,%d3:l),%d0
+    bpls    sq_ntok
+    mvsb    %a1@(712),%d0
+sq_ntok:
+    lea.l   live_note,%a5
+    moveb   %d0,%a5@(0,%d2:l)
     tstb    %a3@(30667)
     beqs    sq_plen
     mvsw    %a1@(713),%d5         | its own length
@@ -19388,10 +19466,8 @@ note_off_hook:
     movel   %d2,%d5
     cmpil   #MAX_TRK,%d5
     bccs    nof_snap          | not a real track: behave as before
-    lea.l   live_note,%a0
-    moveb   %d3,%a0@(0,%d5:l)     | the played note, before any folding.
-                                  | This is the only place it is visible,
-                                  | and it covers pads and sequencer alike.
+    | (live_note is not written here: a note-off for the step before can
+    | arrive after the next note-on, and would put the old note back.)
     lea.l   loop_mode,%a0
     movel   %a0@(0,%d5:l:4),%d6
     cmpil   #2,%d6

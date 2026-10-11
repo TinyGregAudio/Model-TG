@@ -113,8 +113,10 @@ CPU.
 
 In Slice mode the note chooses the slice. In keyboard mode the trig keys play
 consecutive slices (the first key is slice 1), and each sequencer trig plays
-the slice its note picks. Slices play at their original speed; Start and End
-trim inside the slice, and Start above End reverses it.
+the slice its note picks. The note only picks the slice - it does not
+transpose it. The **Pitch** knob does: it changes the playback speed, so pitch
+and length move together (up an octave plays the slice twice as fast). Start
+and End trim inside the slice, and Start above End reverses it.
 
 **MOD** chooses how the sample is cut:
 
