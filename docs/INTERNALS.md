@@ -354,6 +354,14 @@ These were each verified on hardware; they save a lot of rediscovery.
   8 Noise riser (white noise through a high-pass climbing 200 Hz -> 8 kHz
   with the level) and 11 Vinyl (the Sampler's hiss and clicks, by Wear). Each
   is bypassed at 0; the bottom line shows a knob's value for a second. The
+  FUNC state is tracked while the page is open; FUNC + an effect knob snaps
+  clockwise from negative to 0, otherwise to maximum; counterclockwise from
+  positive to 0, otherwise to minimum. Filter's minimum is -127; the others
+  use 0. Gate's maximum is 6, the others 127. Filter uses unaccelerated
+  clicks with FUNC: after snapping from nonzero to 0, four additional net
+  clicks are required to leave 0 in either direction. Reversals cancel
+  travel; FUNC release and page opening clear the hold. Other nonzero
+  encoder events produce one snap through the normal parameter-update path. The
   effects outlive the page (and a pattern change); Return on the page, or
   Settings + Return anywhere ("Master FX off"), turns them all off. The pads'
   track selection is kept too

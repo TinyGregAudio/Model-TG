@@ -217,6 +217,18 @@ Hold **SETTINGS** + **RETRIG** for the retrig page.
 
 Effects on the whole mix of the lit tracks, before the delay and reverb sends.
 Each is off at 0, and the bottom line shows a knob's value as you turn it.
+Hold **FUNC** and turn an effect knob to snap its value:
+
+| current value | clockwise | counterclockwise |
+|---|---|---|
+| negative | 0 | minimum |
+| 0 | maximum | minimum |
+| positive | maximum | 0 |
+
+Filter ranges from −127 to +127; the other effects have a minimum of 0.
+When Filter snaps to 0, keep holding **FUNC** and turn four more clicks to
+reach an extreme. These clicks are not accelerated; reversing cancels travel.
+Release **FUNC** to clear this hold and start a new snap gesture.
 
 | knob | effect |
 |---|---|

@@ -4367,6 +4367,21 @@ krk_done:
     moveq   #0,%d0
     rts
 kh_rtg_n:
+    cmpil   #1,%d0                | FUNC: remember it so a master-FX knob can
+    bnes    krn_nf                | snap to zero or its directional extreme
+    moveq   #0,%d1
+    btst    #0,%a0@(19)
+    beqs    krn_fs
+    moveq   #1,%d1
+krn_fs:
+    movel   %d1,rtg_func
+    tstl    %d1
+    bnes    krn_fout
+    clrl    mfx_fwait             | a fresh FUNC gesture can leave zero at once
+    clrl    mfx_fsteps
+krn_fout:
+    rts                           | FUNC itself still goes to the stock UI
+krn_nf:
     cmpil   #KEY_SETTINGS,%d0
     beqw    kh_mod
     cmpil   #KEY_PATTERN,%d0      | Pattern held: the trig keys choose patterns
@@ -11987,6 +12002,9 @@ rtg_open:
     tstl    mm_obj
     bnew    rgo_out               | a page is up already
     clrl    rtg_on
+    clrl    rtg_func              | do not inherit a missed FUNC release
+    clrl    mfx_fwait
+    clrl    mfx_fsteps
     movea.l #RTG_BASE,%a0         | silence the histories (4 MiB)
     movel   #RTG_NS*RTG_N/8-1,%d0
     moveq   #0,%d1
@@ -12505,17 +12523,81 @@ rgq_o:
 | the pointer then flips.
 MFX_SHOW = 1500                   | blocks: a knob's value shows for a second
 MFX_STEP = 1024                   | wet ramp: 64 samples end to end, Q16
+MFX_FCLICKS = 4                   | extra unaccelerated clicks past Filter zero
 
 | mfx_knob (d3 = knob index, d2 = the encoder event) -> d0 = 1 if it did
 | something (redraw). Keeps d2-d7.
 mfx_knob:
-    pea     4                     | clicks: 1 each slowly, 4 turned fast
+    moveq   #4,%d0               | normally 1 each slowly, 4 turned fast
+    tstl    rtg_func
+    beqs    mfk_speed
+    cmpil   #6,%d3
+    bnes    mfk_speed
+    moveq   #1,%d0               | FUNC + Filter: count real clicks at zero
+mfk_speed:
+    movel   %d0,%sp@-
     pea     1
     movel   %d2,%sp@-
     jsr     0x4006f73a
     lea.l   %sp@(12),%sp
     tstl    %d0
     beqw    mfk_no
+    tstl    rtg_func
+    beqw    mfk_route
+    movel   %d3,%d1               | FUNC + any effect knob: replace its delta
+    subql   #2,%d1                | with a jump to zero or an extreme. Every
+    cmpil   #11,%d1               | mapped effect knob is contiguous (2..13).
+    bhiw    mfk_no
+    lea.l   mfx_snap_tab,%a0
+    movea.l %a0@(0,%d1:l:4),%a0
+    cmpil   #6,%d3
+    bnew    mfk_snap
+    tstl    %a0@
+    bnew    mfk_snap
+    tstl    mfx_fwait
+    beqw    mfk_snap
+    addl    %d0,mfx_fsteps        | zero reached in this gesture: require more
+    movel   mfx_fsteps,%d1        | travel, with reversals cancelling travel
+    cmpil   #MFX_FCLICKS,%d1
+    bgew    mfk_fleave
+    cmpil   #-MFX_FCLICKS,%d1
+    blew    mfk_fleave
+    braw    mfk_no
+mfk_fleave:
+    clrl    mfx_fwait
+    clrl    mfx_fsteps
+mfk_snap:
+    tstl    %d0
+    bmiw    mfk_left
+    moveq   #0,%d1               | clockwise: negative -> 0, else -> max
+    tstl    %a0@
+    bmiw    mfk_delta
+    moveq   #127,%d1
+    cmpil   #10,%d3              | Gate has six divisions, not 127
+    bnew    mfk_delta
+    moveq   #6,%d1
+    braw    mfk_delta
+mfk_left:
+    moveq   #0,%d1               | counterclockwise: positive -> 0, else min
+    tstl    %a0@
+    bgtw    mfk_delta
+    cmpil   #6,%d3               | Filter alone has a negative minimum
+    bnew    mfk_delta
+    moveq   #-127,%d1
+mfk_delta:
+    cmpil   #6,%d3
+    bnew    mfk_apply
+    tstl    %d1
+    bnew    mfk_apply
+    tstl    %a0@
+    beqw    mfk_apply
+    moveq   #1,%d0               | crossing from either side: stop at zero,
+    movel   %d0,mfx_fwait         | then count fresh travel on following events
+    clrl    mfx_fsteps
+mfk_apply:
+    movel   %d1,%d0
+    subl    %a0@,%d0             | normal setters take target - current
+mfk_route:
     cmpil   #6,%d3
     beqs    mfk_filt
     cmpil   #7,%d3
@@ -12649,6 +12731,12 @@ mfk_rt:                           | Rate: the hold's step, shown in Hz
     lea.l   mfx_s_rt,%a0
     braw    mfk_say
 mfk_gate:                         | Gate: one division per click
+    tstl    rtg_func
+    beqs    mfk_gstep
+    addl    mfx_gate,%d0          | FUNC supplies a full jump; ordinary Gate
+    movel   %d0,%d1              | turns use only the delta's sign
+    bras    mfk_g3
+mfk_gstep:
     moveq   #1,%d1
     tstl    %d0
     bpls    mfk_g1
@@ -13793,6 +13881,12 @@ mfx_g4:        .asciz "GATE 1/16"
 mfx_g5:        .asciz "GATE 1/16T"
 mfx_g6:        .asciz "GATE 1/32"
     .balign 4
+| Current-value pointers in physical knob order. FUNC snaps toward zero or the
+| directional extreme; the normal setters still update coefficients and text.
+mfx_snap_tab:  .long mfx_drv, mfx_crs, mfx_rt, mfx_pump, mfx_filt, mfx_res
+               .long mfx_ring, mfx_noise, mfx_gate, mfx_tape, mfx_vinyl, mfx_flg
+mfx_fwait:     .long 0            | Filter arrived at zero during FUNC gesture
+mfx_fsteps:    .long 0            | signed unaccelerated travel since arrival
 mfx_filt:      .long 0            | -127 LP .. 0 off .. 127 HP
 mfx_res:       .long 0            | 0..127
 mfx_on:        .long 0            | the filter is engaged
@@ -14188,6 +14282,7 @@ rtg_divs:      .long RTG_QN/16, RTG_QN/12, RTG_QN/8, RTG_QN/6, RTG_QN/4, RTG_QN/
                .long RTG_QN/2, RTG_QN*2/3, RTG_QN*3/4, RTG_QN, RTG_QN*4/3, RTG_QN*3/2
                .long RTG_QN*2, RTG_QN*8/3, RTG_QN*3, RTG_QN*4
 rtg_on:        .long 0            | the page is up
+rtg_func:      .long 0            | FUNC held on the retrig page
 rtg_pat:       .long 0            | Pattern is held (trig keys pass through)
 rtg_pat0:      .long 0            | the pattern the page opened on
 rtg_topv:      .long 0            | the page's own entry at the top of the stack
