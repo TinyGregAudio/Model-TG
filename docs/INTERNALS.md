@@ -55,6 +55,14 @@ These were each verified on hardware; they save a lot of rediscovery.
   separate store: set `0x4001646a(track, step, slot, value)`, clear
   `0x400164b0`, get `0x4001591e`; slots come from the parameter table at
   `0x4010dce0` (56-byte entries, slot at +4).
+- **Transpose:** `transpose_enc` consumes physical Pitch (encoder 2) in the
+  parameter view while `transpose_held` tracks RETRIG, except with SETTINGS
+  or a custom page open. `transpose_steps` walks the selected track's active
+  length, resolves inherited Trig Notes from +712, clamps to 0..127 and writes
+  through `0x40016642`. Original notes live in the stock parameter-revert tree, keyed by track and step;
+  the signed delta is drawn inside that view. See the stock BACK section below
+  for capture, restore and expiry. This adds no audio-thread work. Hardware
+  validation of the stock-context integration is still needed.
 - **Step flag bit 12** (0x1000) is unused by the OS: nothing tests or sets it,
   and it is saved, loaded and copied with the step. Slide trigs keep their
   mark there. Whether a trig sounds a note: bit 7 when bit 11 is set, else the
@@ -84,6 +92,116 @@ These were each verified on hardware; they save a lot of rediscovery.
   the main mix `0x40056610` sums them into the interleaved stereo bus at
   `0x8000b990`, which `0x400565c6` then scales x4 for the output.
 - **Sample format** in internal storage: see [notes/sample_format.md](notes/sample_format.md).
+
+## Stock BACK parameter revert (OS 1.13)
+
+These findings come from static inspection of the user's stock OS 1.13,
+with the dispatch table, calls, timer constants and Trig Note setter paths
+checked against that image. They are not additional hardware-test results.
+Function names below describe inferred roles, not recovered source symbols.
+
+The ordinary parameter display owns one active revert context, rather than
+an edit-history stack. Its primary vtable is `0x4010052c`; key slot +8 points
+to `0x4001f97e`, encoder slot +0x44 to `0x4001f4f0`, and tick slot +0x2c to
+`0x4001efaa`. Transpose now uses this parameter view itself, including the original key
+and tick handlers.
+
+| Parameter-view offset | Observed use |
+|---|---|
+| +0x1fc..+0x210 | Six saved 32-bit track values for the active parameter |
+| +0x214 | Tree container for original per-step values |
+| +0x21c / +0x220 / +0x224 / +0x228 | Tree root / first / last / entry count |
+| +0x22c | Active encoder index |
+| +0x230 | Active parameter ID (zero ends the context) |
+| +0x234 | Selected track index |
+| +0x238 | Inactivity countdown in UI ticks |
+| +0x23c | Restore-all-tracks flag, set by the all-track encoder path |
+| +0x23d | Changed-value display flag, cleared after BACK revert |
+| +0x23e | Separate BACK-held live-recording removal mode |
+
+**Capture.** At `0x4001f72a`, the encoder handler compares the parameter ID
+and selected track with the active context. When either changes, it updates
+those fields and calls `0x4001ddb2(view, parameter)` to read and save the
+parameter's value on each of the six tracks. Each parameter turn refreshes
++0x238 to 60 at `0x4001f760`.
+
+For step edits, `0x4001e93e` arranges a selected-step callback at
+`0x4001f15a`. The callback reads the step's previous value through the view's
++0x60 virtual, searches the tree by step index, and inserts `{step, value}`
+only if that step has no entry yet (`0x400d8956` at `0x4001f2a0`). Thus repeated
+edits retain the first value. Nodes carry the step at +16 and saved value at
++20. The callback also performs edit preparation/application; it is not a
+standalone snapshot API.
+
+**BACK.** Key 12's table entry in `0x4001f97e` leads to `0x4001f9ec`.
+Outside the separate BACK-held mode, a click with event flag bit 1 clear
+reverts when +0x230 is nonzero. The path at `0x4001fada` first calls
+`0x4001e366(view)` to restore saved steps, then `0x4001de00(view, track)` to
+restore the track value (or all six tracks when +0x23c is set). It redraws,
+sets the timer to 15, and clears +0x23d. It does not swap the saved values
+with the edited ones: this path is revert, not undo/redo toggling.
+
+Step restoration traverses the tree. A saved value of -1 calls the view's
++0x88 virtual to remove the step override; other values go through the
+parameter handle's +0x28 setter. The track restore routine uses the six
+saved values and the ordinary parameter-setting path `0x4000b274`.
+
+**Expiry.** `0x4001efaa` decrements a positive countdown. At zero, subject to
+the edit-state check `0x4006b736` and the separate BACK-held mode being off,
+it calls `0x4001ef0e`. That routine clears the active parameter/encoder/track,
+resets flags, and invokes `0x4001eecc` to clear the saved values and free the
+step tree. There is also a track-selection observer at `0x4001eff8` that
+clears the step tree on a track change. The 60/15 tick constants are verified;
+their exact wall-clock durations have not been measured here.
+
+**Relevance to transpose.** The stock per-step mechanism already supports
+Trig Note (parameter 0x0f), not only sound p-locks. Its parameter-handle getter
+`0x4000aaee` returns an explicit note in Q8 units or exactly -1 for an inherited
+note. Setter `0x4000abdc` converts Q8 back to the note byte and calls
+`0x40016642`; clear `0x4000ace8` calls that same setter with -1. Therefore the
+stock restore machinery can represent multiple original notes, clipping,
+and inherited defaults without copying a whole track block.
+
+**Transpose integration.** `transpose_enc` replaces the primary encoder slot
+and secondary EncoderHandler thunk (+4 adjustment). It activates Trig Note
+through `0x4006b71c`, raises the parameter view, and captures the six track
+baselines. TRACK uses the same `0x4007faf4(2)` held-key query as stock control-all.
+Without TRACK it visits the selected track; with TRACK it visits indices 0..5
+through `0x4000cfcc(pattern, track)`, without changing the selected track. Each
+track uses its own length and inherited note default.
+
+Each changed note goes into the stock unique-key tree using `0x400d8956`, with
+key `track * 64 + step` and value original Q8 note or -1. Repeated edits retain
+the first value, even when switching between single-track and all-track scope.
+`transpose_restore` hooks `0x4001e366` to decode these keys only for a live
+transpose context. Other contexts replay the original entry instructions and
+continue through stock restore. The original BACK handler still performs track
+baseline restore, redraw and the 15-tick timeout; the original tick/selection
+handlers free the tree. Each turn refreshes the normal 60-tick timeout. An
+ordinary encoder edit first closes our context so encoded keys cannot enter
+stock step editing. At most 384 tree nodes are needed (24 bytes each, excluding
+allocator overhead); all work runs on the UI thread.
+
+`wf_popup` draws a signed delta, prefixed ALL for all-track turns. Switching
+scope resets the displayed delta but retains the original revert baseline.
+Stock labels/revert indications remain, and clearing the changed flag displays
+zero. The saved view address is only compared against a live argument, never
+dereferenced later. There is no private popup or independent expiry.
+
+**Stock control-all trace.** `0x4001f886` checks TRACK, then `0x4005a5cc` filters
+parameter categories. Trig Note (category 18) is excluded from this ordinary
+path. The accepted path sets +0x23c and invokes `0x4001d6e4`, which resolves the
+knob's parameter for each of six tracks and calls its relative-value setter.
+BACK uses +0x23c to restore six track-level values via `0x4001de00`; stock step
+restore only targets the selected track. This is why transpose needs the
+track-aware step restore extension rather than only setting +0x23c.
+
+**Hardware validation (2026-10-18).** The user confirmed all-track transpose
+and BACK restore in the diagnostic build using the stock TRACK scan query.
+Both TRACK and RETRIG displayed event-held=1 and scan-held=1. The extra TRACK
+event-state workaround was removed; production builds use the stock query and
+omit the diagnostic overlay. This confirms the chord and revert on hardware; exhaustive timing,
+performance and edge-case coverage has not been established on hardware.
 
 ## What each part does, and how
 

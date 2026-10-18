@@ -4220,6 +4220,14 @@ KEY_ATKMOD = KEY_PRESET | the modifier the attack dial uses. Track was
 key_hook:
     moveal  %sp@(4),%a0
     movel   %a0@(12),%d0          | exactly what the stock accessor returns
+    | Track RETRIG before page dispatch so its release cannot leave a stale
+    | transpose modifier when a custom page consumes the key.
+    cmpil   #KEY_RETRIG,%d0
+    bnew    kh_transpose_ready
+    movel   %a0@(16),%d1
+    andil   #1,%d1
+    movel   %d1,transpose_held
+kh_transpose_ready:
     tstl    rtg_on
     bnew    kh_rtg                | the retrig page: the trig keys are its
     tstl    sle_on
@@ -7715,6 +7723,311 @@ gm_enc_gate:
 gm_g_stock:
     jmp     0x40006158
 
+| ParameterPageView's primary encoder and secondary EncoderHandler thunk.
+| Use the live view's Trig Note revert context; stock owns BACK and expiry.
+transpose_enc_th:
+    subql   #4,%sp@(4)
+    jmp     transpose_enc
+transpose_enc:
+    movea.l %sp@(8),%a0
+    moveq   #2,%d0
+    cmpl    %a0@(12),%d0
+    bnew    tse_stock
+    tstl    transpose_held
+    beqw    tse_stock
+    tstl    set_held
+    bnew    tse_stock
+    tstl    mm_obj
+    bnew    tse_stock
+    tstl    rtg_on
+    bnew    tse_stock
+    tstl    sle_on
+    bnew    tse_stock
+    bsr     gm_live
+    tstl    %d0
+    bnew    tse_stock
+    movea.l %sp@(4),%a0
+    tstb    %a0@(0x23e)          | stock BACK-held recording mode
+    bnew    tse_stock
+    linkw   %fp,#0
+    lea.l   %sp@(-24),%sp
+    moveml  %d2-%d5/%a2-%a3,%sp@
+    movea.l %fp@(8),%a3
+    pea     1
+    pea     1
+    movel   %fp@(12),%sp@-
+    jsr     0x4006f73a           | unaccelerated semitone delta
+    lea.l   %sp@(12),%sp
+    movel   %d0,%d2
+    beqw    tse_out
+    jsr     0x400cf866
+    movel   %d0,%sp@-
+    jsr     0x4000eb90
+    movel   %d0,%sp@-
+    jsr     0x40012412
+    addql   #8,%sp
+    movel   %d0,%d3
+    cmpil   #6,%d3
+    bccw    tse_out
+    pea     KEY_TRACK
+    jsr     0x4007faf4           | same held-key query as stock control-all
+    addql   #4,%sp
+    movel   %d0,%d4
+    jsr     0x400cf9a8
+    pea     15
+    movel   %d0,%sp@-
+    jsr     0x4006b71c           | activate Trig Note, notify stock observers
+    addql   #8,%sp
+    cmpal   transpose_view,%a3
+    bnew    tse_new
+    cmpl    transpose_track,%d3
+    bnew    tse_new
+    moveq   #15,%d0
+    cmpl    %a3@(0x230),%d0
+    bnew    tse_new
+    cmpl    %a3@(0x234),%d3
+    beqw    tse_ready
+tse_new:
+    movel   %a3,%sp@-
+    jsr     0x4001eecc           | free old step tree, reset saved track values
+    addql   #4,%sp
+    moveq   #15,%d0
+    movel   %d0,%a3@(0x230)
+    movel   %d3,%a3@(0x234)
+    moveq   #2,%d0
+    movel   %d0,%a3@(0x22c)
+    clrb    %a3@(0x23c)
+    clrb    %a3@(0x23d)
+    pea     15
+    movel   %a3,%sp@-
+    jsr     0x4001ddb2           | stock six-track baseline capture
+    addql   #8,%sp
+    movel   %a3,transpose_view   | identity only: never dereferenced later
+    movel   %d3,transpose_track
+tse_ready:
+    cmpl    transpose_all,%d4
+    beqw    tse_scope
+    clrl    transpose_delta     | displayed delta applies to this scope
+    movel   %d4,transpose_all
+tse_scope:
+    tstb    %a3@(0x23d)          | new context or stock BACK just restored it
+    bnew    tse_delta
+    clrl    transpose_delta
+tse_delta:
+    addl    %d2,transpose_delta
+    movel   %a3,%sp@-
+    movel   %a3@(0x2c),%sp@-
+    jsr     0x40077946           | raise parameter view as stock encoder does
+    addql   #8,%sp
+    movel   %d3,%d5
+    tstl    %d4
+    beqw    tse_tracks
+    moveq   #0,%d5
+    moveq   #1,%d0
+    moveb   %d0,%a3@(0x23c)      | sticky, like stock control-all
+tse_tracks:
+    movel   %d2,%d0
+    movel   %d5,%d1
+    bsr     transpose_steps
+    tstl    %d4
+    beqw    tse_changed
+    addql   #1,%d5
+    cmpil   #6,%d5
+    bcsw    tse_tracks
+tse_changed:
+    moveq   #60,%d0
+    movel   %d0,%a3@(0x238)      | original inactivity timeout
+    moveq   #1,%d0
+    moveb   %d0,%a3@(0x23d)
+    movel   %a3,%sp@-
+    jsr     0x40076082
+    addql   #4,%sp
+tse_out:
+    moveml  %sp@,%d2-%d5/%a2-%a3
+    lea.l   %sp@(24),%sp
+    unlk    %fp
+    moveq   #1,%d0
+    rts
+tse_stock:
+    | Encoded step keys must not leak into ordinary parameter editing.
+    movea.l %sp@(4),%a0
+    cmpal   transpose_view,%a0
+    bnew    tse_fallback
+    movel   %a0,%sp@-
+    jsr     0x4001ef0e           | original context cleanup and redraw
+    addql   #4,%sp
+tse_fallback:
+    clrl    transpose_view
+    jmp     0x4001f4f0
+
+| d0 = delta, d1 = track, a3 = live view. Stock owns tree allocation/lifetime.
+| Keys are track*64+step, values remain Q8 notes / -1. transpose_restore decodes
+| the keys; ordinary stock parameter contexts retain the original step keys.
+transpose_steps:
+    lea.l   %sp@(-32),%sp
+    moveml  %d2-%d7/%a2/%a4,%sp@
+    movel   %d0,%d4
+    movea.l %d1,%a4
+    jsr     0x400cf866
+    movel   %d0,%sp@-
+    jsr     0x4000f208
+    addql   #4,%sp
+    movel   %a4,%sp@-
+    movel   %d0,%sp@-
+    jsr     0x4000cfcc           | pattern track by index; selection unchanged
+    addql   #8,%sp
+    tstl    %d0
+    beqw    tsp_out
+    movea.l %d0,%a2
+    movel   %a2,%sp@-
+    jsr     0x40016402
+    addql   #4,%sp
+    movel   %d0,%d3
+    moveq   #0,%d2
+tsp_loop:
+    cmpl    %d3,%d2
+    bgew    tsp_out
+    movea.l %a2@,%a0
+    movea.l %a0@(40),%a0
+    movel   %a2,%sp@-
+    jsr     %a0@
+    addql   #4,%sp
+    tstl    %d0
+    beqw    tsp_out
+    movea.l %d0,%a0
+    movew   %a0@(0,%d2:l:2),%d0
+    btst    #0,%d0
+    beqw    tsp_next
+    lea.l   %a0@(580),%a1
+    mvzb    %a1@(0,%d2:l),%d5
+    movel   %d5,%d6
+    lsll    #8,%d6
+    cmpil   #255,%d5
+    bnew    tsp_note
+    moveq   #-1,%d6
+    mvzb    %a0@(712),%d5
+tsp_note:
+    movel   %d5,%d7
+    addl    %d4,%d7
+    bplw    tsp_upper
+    moveq   #0,%d7
+tsp_upper:
+    cmpil   #127,%d7
+    blew    tsp_write
+    moveq   #127,%d7
+tsp_write:
+    cmpl    %d5,%d7
+    beqw    tsp_next
+    movel   %a4,%d0
+    lsll    #6,%d0
+    addl    %d2,%d0
+    movel   %d6,%sp@-
+    movel   %d0,%sp@-
+    movel   %sp,%a0
+    movel   %a0,%sp@-
+    pea     %a3@(0x214)
+    jsr     0x400d8956           | insert_unique({track*64+step, original}); retain first
+    lea.l   %sp@(16),%sp
+    movel   %d7,%sp@-
+    movel   %d2,%sp@-
+    movel   %a2,%sp@-
+    jsr     0x40016642
+    lea.l   %sp@(12),%sp
+tsp_next:
+    addql   #1,%d2
+    braw    tsp_loop
+tsp_out:
+    moveml  %sp@,%d2-%d7/%a2/%a4
+    lea.l   %sp@(32),%sp
+    rts
+
+| Replace only the value drawing; the surrounding label, revert indication,
+| BACK dispatch and lifetime all belong to the original parameter view.
+transpose_draw:
+    movea.l %sp@(4),%a0
+    movel   %sp@(8),%d1
+    movel   transpose_delta,%d0
+    tstb    %a0@(0x23d)
+    bnew    tsd_value
+    moveq   #0,%d0              | stock BACK has restored original notes
+tsd_value:
+    lea.l   transpose_fmt,%a0
+    tstl    %d0
+    bplw    tsd_sign
+    addql   #1,%a0
+tsd_sign:
+    tstl    transpose_all
+    beqw    tsd_format
+    lea.l   transpose_all_pos,%a0
+    tstl    %d0
+    bplw    tsd_format
+    lea.l   transpose_all_neg,%a0
+tsd_format:
+    movel   %d0,%sp@-
+    movel   %a0,%sp@-
+    pea     2                   | centred, same flags/font as stock labels
+    pea     19
+    pea     32
+    pea     0x40ea14d4
+    movel   %d1,%sp@-
+    jsr     0x40071a04
+    lea.l   %sp@(28),%sp
+    rts
+
+| Entry hook for stock step restore. The original BACK handler still calls
+| this, restores track baselines, redraws and sets its 15-tick timeout.
+transpose_restore:
+    movea.l %sp@(4),%a0
+    cmpal   transpose_view,%a0
+    bnew    tsr_stock
+    moveq   #15,%d0
+    cmpl    %a0@(0x230),%d0
+    bnew    tsr_stock
+    lea.l   %sp@(-24),%sp
+    moveml  %d2-%d3/%a2-%a5,%sp@
+    movea.l %a0,%a2
+    lea.l   %a2@(0x218),%a5      | stock tree sentinel
+    movea.l %a2@(0x220),%a3
+tsr_loop:
+    cmpal   %a5,%a3
+    beqw    tsr_out
+    movel   %a3@(16),%d2
+    movel   %d2,%d3
+    andil   #63,%d3
+    lsrl    #6,%d2
+    jsr     0x400cf866
+    movel   %d0,%sp@-
+    jsr     0x4000f208
+    addql   #4,%sp
+    movel   %d2,%sp@-
+    movel   %d0,%sp@-
+    jsr     0x4000cfcc
+    addql   #8,%sp
+    tstl    %d0
+    beqw    tsr_next
+    movea.l %d0,%a4
+    movel   %a3@(20),%d0
+    asrl    #8,%d0              | Q8 to byte; inherited -1 stays -1
+    movel   %d0,%sp@-
+    movel   %d3,%sp@-
+    movel   %a4,%sp@-
+    jsr     0x40016642
+    lea.l   %sp@(12),%sp
+tsr_next:
+    movel   %a3,%sp@-
+    jsr     0x400f5c04           | next stock tree node
+    addql   #4,%sp
+    movea.l %d0,%a3
+    braw    tsr_loop
+tsr_out:
+    moveml  %sp@,%d2-%d3/%a2-%a5
+    lea.l   %sp@(24),%sp
+    rts
+tsr_stock:
+    lea.l   %sp@(-20),%sp       | replay overwritten stock prologue
+    moveml  %d2/%a2-%a5,%sp@
+    jmp     0x4001e36e
+
 | ---- the rows' closures ----
 | label: a0 = the output String; the string pointer arrives in a1.
 gm_lab_shape:
@@ -9274,6 +9587,15 @@ sp_out:
 
     .balign 4
 popup_mult:    .long 0   | show_popup: 0 = the stock stay, else N times it
+transpose_view:  .long 0 | live-view identity, never used as a saved pointer
+transpose_track: .long -1
+transpose_delta: .long 0 | requested semitones in the active stock context
+transpose_all:   .long 0 | last dial scope; baseline may cover both scopes
+transpose_fmt:   .asciz "+%d"
+transpose_all_pos: .asciz "ALL +%d"
+transpose_all_neg: .asciz "ALL %d"
+    .align 4
+transpose_held: .long 0  | RETRIG is down: Pitch edits existing step notes
 set_held:      .long 0   | SETTINGS is down (the chords' modifier)
 mod_used:      .long 0   | a chord fired since SETTINGS went down
 sld_keys:      .long 0   | trig keys whose press made a slide (bit per key)
@@ -16615,7 +16937,7 @@ rs_menu_open:
     lea.l   rs_desc,%a0
     lea.l   gm_cur,%a1
     movel   %a0,%a1@
-    braw    lm_build
+    jmp     lm_build              | popup feedback puts this beyond bra.w range
 
 | values: a0 = &setting, a1 = its names
 rs_val_src:
@@ -18121,6 +18443,14 @@ WF_TOP  = 10
 WF_MID  = 37
 WF_HALF = 26
 wf_popup:
+    moveq   #15,%d0
+    cmpl    %sp@(12),%d0
+    bnew    wp_not_transpose
+    movea.l %sp@(4),%a0
+    cmpal   transpose_view,%a0
+    bnew    wp_not_transpose
+    jmp     transpose_draw
+wp_not_transpose:
     movel   %sp@(12),%d0          | id
     moveq   #0,%d1
     cmpil   #0x2e,%d0             | Start

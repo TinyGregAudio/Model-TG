@@ -22,6 +22,7 @@ The twelve parameter knobs are numbered 1 to 12.
 - [Stereo](#stereo)
 - [Retrig and master FX](#retrig-and-master-fx)
 - [Additions for every machine](#additions-for-every-machine)
+- [Transpose](#transpose)
 - [Slide trigs](#slide-trigs)
 - [Scale Lock](#scale-lock)
 - [Uploading samples with Elektron Transfer](#uploading-samples-with-elektron-transfer)
@@ -249,6 +250,37 @@ The master FX stay on after you close the page, and through pattern changes.
   machines are cheaper, and delay and reverb switch off while nothing is
   sounding.
 
+## Transpose
+
+Hold **RETRIG** and turn **Pitch** to move the selected track's existing
+trigs up or down by one semitone per click. This edits step notes across all
+pages within the track's current pattern length; empty steps stay empty.
+Steps using the track's default note get their own transposed note. Notes
+stop at 0 and 127. The edits are saved with the pattern.
+
+The parameter display shows the accumulated semitone delta, such as **+12**
+or **-5**, and updates as you turn Pitch. The number counts requested changes;
+notes at the limits still clamp to 0–127.
+
+Press **BACK** while the parameter display is active to revert the transpose.
+This uses the stock parameter-revert context and timeout, restoring original
+step notes exactly, including clipped notes and inherited track defaults.
+Repeated turns share that context until stock ends it (for example, on expiry
+or a parameter change); releasing RETRIG alone does not create a new baseline.
+BACK shows **+0** and uses stock's shorter post-revert timeout. It is revert,
+not an undo/redo toggle.
+
+Hold **TRACK + RETRIG** and turn **Pitch** to transpose all six tracks.
+Each track uses its own pattern length and default note; empty steps stay empty.
+The display reads **ALL +12** or **ALL -5**. Adding or releasing TRACK changes
+which tracks the next turn affects and resets the displayed delta for that scope.
+Within an active revert context, **BACK** restores all notes changed by either
+scope, including earlier single-track turns. Track selection and stock context
+expiry still end that context.
+
+On a Sampler in Slice mode, changing a step's note selects a different slice.
+Custom Model-TG pages keep their own knob controls.
+
 ## Slide trigs
 
 A slide trig glides into its values instead of jumping to them. Every
@@ -327,6 +359,7 @@ are included (build with `--no-tweaks` to leave them out):
 | anywhere | **SETTINGS** + **RETRIG** | retrig page and master FX |
 | anywhere | **SETTINGS** + return | master FX off |
 | anywhere | **PRESET** + Decay / Sweep / Contour | Attack / Filter / Resonance |
+| pattern | **RETRIG** + Pitch | transpose existing trigs by semitones |
 | grid | **SETTINGS** + trig key | slide trig on / off |
 | browser | pick a sample file | load it onto the Sampler track |
 | step held | **PRESET**, pick a sample | sample lock |
