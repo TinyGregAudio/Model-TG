@@ -291,6 +291,20 @@ upload samples, including stereo WAVs. Every power-on starts at CYC.
 **In SMP, use Transfer for samples only, and never accept an OS update from
 it.**
 
+## Mono output
+
+Set **Device Config > Output** to **MON** to send the same mono mix to both
+outputs. **STE** restores stereo; every power-on starts in stereo.
+Mono centers each track's effective pan, then averages left and right after
+the tracks, delay, reverb and master FX. Turning pan, pan locks and pan LFO
+modulation no longer change the dry track's volume or position in mono.
+Saved pan settings stay intact and take effect again in **STE**.
+
+The pan override runs once per track per audio block, using the stock gain
+ramps. The fold uses a short integer loop with no multiplies or extra audio buffers.
+It adds a small processing cost; it does not reduce stereo sample rendering
+cost. Use the Sampler's **CHN Mono** option to save CPU on stereo samples.
+
 ## The System page
 
 **Device Config > System** shows the audio CPU load (now and at its worst)

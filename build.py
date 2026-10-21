@@ -175,7 +175,7 @@ _dis=subprocess.run([CROSS+"objdump","-d",elf],capture_output=True,text=True,che
 # Tables of .long data inside the code (objdump decodes them as instructions)
 # are skipped by the label that holds them.
 _DATA_LABELS={'st_fields','st_fields_end','st_reset','key_value_strings',
-              'rs_items','rs_desc'}   # pointer tables (menu descriptors), not code
+              'rs_items','rs_desc','rtg_names'}   # pointer tables, not code
 _wrapped=[]; _in=None
 for _l in _dis.splitlines():
     _h=_re.match(r'^[0-9a-f]{8} <([^>]+)>:',_l)
@@ -618,6 +618,12 @@ if 'fx_early' in sym:
     assert bytes(d[_o:_o+12])==bytes.fromhex("4eb9400579424eb9400573fa"), bytes(d[_o:_o+12]).hex()
     d[_o:_o+12]=b'\x4e\xb9'+struct.pack('>I',sym['fx_c'])+b'\x4e\x71'*3
     print("  0x4005699c/0x40056a2c/0x40056a36 -> fx_a / fx_b / fx_c")
+# Mono centers the effective pan before the stock L/R gain targets and ramps
+# are calculated. Replay the overwritten add, including its flags for bpl.
+_o=0x40056832-BASE
+assert bytes(d[_o:_o+6])==bytes.fromhex("0681ffffff00"), bytes(d[_o:_o+6]).hex()
+jmp(0x40056832, sym['mono_pan'])
+print("  0x40056832 -> mono_pan (effective pan only, stock gain ramps)")
 # The master FX's Noise riser and Vinyl go on the mixed bus: mfx_master
 # in place of `pea 4; pea 0x8000b990; jsr 0x400565c6`, then `subql #8,sp`
 # so the `addql #8,sp` that follows stays balanced.
