@@ -352,6 +352,17 @@ def jmp(addr,target,extra=b''):
     d[o:o+6+len(extra)]=b'\x4e\xf9'+struct.pack('>I',target)+extra
     print(f"  0x{addr:08x} -> jmp 0x{target:08x}")
 
+# MIDI gate ownership checks run after the stock writers raise IPL7. USB
+# and RX are untouched; the third hook prevents flush waiting on BREAK.
+for _addr,_name,_old in (
+        (0x40001154,'gate_tx_buffer','2208d2804ab94049dca0'),
+        (0x4000124e,'gate_tx_byte','4ab94049dca0'),
+        (0x40001320,'gate_flush_status','1039ec074004')):
+    _bytes=bytes.fromhex(_old)
+    _o=_addr-BASE
+    assert bytes(d[_o:_o+len(_bytes)])==_bytes, (_name, bytes(d[_o:_o+len(_bytes)]).hex())
+    jmp(_addr,sym[_name],b'\x4e\x71'*((len(_bytes)-6)//2))
+
 jmp(0x400a7da8, sym['sampler_pre'],      b'\x4e\x71')
 jmp(0x400a7e02, sym['sampler_dispatch'], b'\x4e\x71'*12)
 jmp(0x4008171e, sym['pad_load_hook'])

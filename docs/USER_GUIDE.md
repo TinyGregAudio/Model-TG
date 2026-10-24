@@ -291,6 +291,43 @@ upload samples, including stereo WAVs. Every power-on starts at CYC.
 **In SMP, use Transfer for samples only, and never accept an OS update from
 it.**
 
+## Experimental gate clock on MIDI OUT
+
+**Device Config > Gate Clock** repurposes the physical MIDI OUT/THRU jack
+as a clock signal. **OFF** is ordinary MIDI and is restored on every boot.
+This is experimental: the firmware controls the UART line, but the jack's
+voltage, polarity and ability to drive a CV input have not been measured.
+Use a TRS breakout to measure tip/ring relative to sleeve with **IDLE** and
+**BREAK** before connecting CV equipment; these labels describe UART states,
+not guaranteed low/high voltages. This does not provide pitch CV.
+
+For clock pulses:
+
+1. Set **MIDI > SYNC > CLK OUT** to **ON**.
+2. Set **MIDI > PORTS > OUT TO** to **MID** or **M+U**, and **OUT/THRU** to **OUT**.
+3. Choose a Gate Clock rate and press **PLAY**.
+
+| Gate Clock | Pulses per quarter note |
+|---|---|
+| **1/4** | 1 |
+| **1/8** | 2 |
+| **1/16** | 4 (one per six MIDI clocks) |
+| **24PPQN** | 24 (one per MIDI clock) |
+
+Clock mode holds UART BREAK between pulses and releases it for about 5 ms
+at each tick, putting the TXD rising edge at the start of the pulse. Timing
+follows the outgoing MIDI clock; Stop returns to BREAK. Start emits the first
+pulse immediately and resets the divider; the next pulse follows after the
+selected number of MIDI clocks. Enabling
+mid-play starts the divider at the next clock after the port becomes ready.
+**IDLE** and **BREAK** hold fixed UART states for measurement, even while
+stopped; select **OFF** to return to MIDI.
+
+Gate mode suppresses normal MIDI data on the physical output. Already queued
+bytes finish before it takes over, so activation can take a moment during a
+transfer. MIDI IN and USB MIDI retain their normal routing. Changing rates
+releases the current pulse and resets the divider. The setting is runtime-only.
+
 ## The System page
 
 **Device Config > System** shows the audio CPU load (now and at its worst)
